@@ -150,14 +150,14 @@ class ProgressTracker:
             lines.append(f"🚀 Processing: {input_description}")
         else:
             lines.append("🚀 Processing...")
-        
-        # Stage progress
+          # Stage progress
         stage_icons = {
             ProcessingStage.INPUT_VALIDATION: "📋",
             ProcessingStage.AUDIO_ACQUISITION: "🎵",
             ProcessingStage.TRANSCRIPT_GENERATION: "📝",
             ProcessingStage.CONTENT_ANALYSIS: "🤖",
-            ProcessingStage.FILE_ORGANIZATION: "📁"
+            ProcessingStage.FILE_ORGANIZATION: "📁",
+            ProcessingStage.PODCAST_GENERATION: "🎙️"
         }
         
         stage_names = {
@@ -165,7 +165,8 @@ class ProgressTracker:
             ProcessingStage.AUDIO_ACQUISITION: "Audio acquisition",
             ProcessingStage.TRANSCRIPT_GENERATION: "Transcript generation",
             ProcessingStage.CONTENT_ANALYSIS: "Content analysis",
-            ProcessingStage.FILE_ORGANIZATION: "File organization"
+            ProcessingStage.FILE_ORGANIZATION: "File organization",
+            ProcessingStage.PODCAST_GENERATION: "Podcast generation"
         }
         
         for stage in ProcessingStage:

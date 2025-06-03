@@ -22,33 +22,33 @@ import importlib.util
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
-# Add the Scripts directory to the path so we can import our modules
+# Add the Code directory to the path so we can import our modules
 script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, script_dir)
 
 # Import our utility modules
-from utils.progress_tracker import ProgressTracker, ProcessingStage
-from utils.error_handler import ErrorHandler, ErrorCategory
-from utils.file_organizer import FileOrganizer
+from Utils.progress_tracker import ProgressTracker, ProcessingStage
+from Utils.error_handler import ErrorHandler, ErrorCategory
+from Utils.file_organizer import FileOrganizer
 
 # Import existing processing modules
 try:
     from Extraction.youtube_audio_extractor import download_audio
     from Extraction.audio_diarizer import diarize_audio, sanitize_audio_filename, extract_channel_name
-      # Import from Content Analysis directory (with space in name)
+    # Import from Content_Analysis directory
     import importlib.util
-    content_analysis_path = os.path.join(script_dir, "Content Analysis", "transcript_analyzer.py")
+    content_analysis_path = os.path.join(script_dir, "Content_Analysis", "transcript_analyzer.py")
     spec = importlib.util.spec_from_file_location("transcript_analyzer", content_analysis_path)
     transcript_analyzer = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(transcript_analyzer)
-      # Extract the functions we need
+    # Extract the functions we need
     load_transcript = transcript_analyzer.load_transcript
     analyze_with_gemini = transcript_analyzer.analyze_with_gemini
     load_analysis_rules = transcript_analyzer.load_analysis_rules
     configure_gemini = transcript_analyzer.configure_gemini
     
     # Import podcast narrative generator
-    podcast_generator_path = os.path.join(script_dir, "Content Analysis", "podcast_narrative_generator.py")
+    podcast_generator_path = os.path.join(script_dir, "Content_Analysis", "podcast_narrative_generator.py")
     spec = importlib.util.spec_from_file_location("podcast_narrative_generator", podcast_generator_path)
     podcast_generator_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(podcast_generator_module)
@@ -80,7 +80,7 @@ class MasterProcessor:
         # Processing state
         self.current_input = ""
         self.processing_results = {}
-        
+    
     def _generate_session_id(self) -> str:
         """Generate a unique session ID."""
         timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -90,12 +90,12 @@ class MasterProcessor:
     def _load_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
         """Load configuration from YAML file."""
         if config_path is None:
-            config_path = os.path.join(script_dir, "config", "default_config.yaml")
+            config_path = os.path.join(script_dir, "Config", "default_config.yaml")
         
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
-              # Expand relative paths
+            # Expand relative paths
             base_dir = os.path.dirname(script_dir)  # Go up one level from Scripts
             for key, path in config['paths'].items():
                 if not os.path.isabs(path):
@@ -593,12 +593,11 @@ ANALYSIS RESULTS:
         
         # Extract base filename without extension
         base_name = os.path.splitext(os.path.basename(audio_filename))[0]
-        
         # Check for Joe Rogan episodes
         if "Joe Rogan Experience" in base_name:
             joe_rogan_rules = os.path.join(
                 os.path.dirname(os.path.abspath(__file__)), 
-                'Content Analysis', 
+                'Content_Analysis', 
                 'JoeRoganAnalysisRules.txt'
             )
             if os.path.exists(joe_rogan_rules):

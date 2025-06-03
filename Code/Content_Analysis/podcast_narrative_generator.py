@@ -29,7 +29,7 @@ class PromptLoader:
 class PodcastNarrativeGenerator:
     """Generate podcast scripts from analysis JSON using Gemini AI"""
     
-    def __init__(self, config_path: str = "Scripts/config/default_config.yaml"):
+    def __init__(self, config_path: str = "Code/Config/default_config.yaml"):
         # Load existing config
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)        # Initialize Gemini
@@ -37,7 +37,7 @@ class PodcastNarrativeGenerator:
         self.model = genai.GenerativeModel('gemini-2.5-flash-preview-05-20')
         
         # Initialize prompt loader
-        self.prompt_loader = PromptLoader("Scripts/Content Analysis/Prompts/")
+        self.prompt_loader = PromptLoader("Code/Content_Analysis/Prompts/")
         
         # Setup logging
         logging.basicConfig(level=logging.INFO)

@@ -1,16 +1,42 @@
+# YouTube Content Processing Pipeline - .gitignore
+# Updated: June 3, 2025 - Post-refactoring to new directory structure
+# 
+# This gitignore reflects the new Code/ and Content/ separation implemented
+# in the directory refactoring. Legacy directory references have been updated.
+
 # Exclude large media and data files
-Audio Rips/
-Video Rips/
-Transcripts/
+Content/Audio/Rips/
+Content/Video/Rips/
+Content/Audio/Generated/
+Content/Video/Clips/
+
+# Exclude raw transcript and analysis data (keep structure, exclude large files)
+Content/Raw/*/
+Content/Analysis/*/
+Content/Scripts/*/
+
+# Include important structure files but exclude large content
+!Content/Raw/.gitkeep
+!Content/Analysis/.gitkeep
+!Content/Scripts/.gitkeep
+!Content/Audio/Rips/.gitkeep
+!Content/Video/Rips/.gitkeep
 
 # Exclude configuration files with sensitive data
-Scripts/config/default_config.yaml
+Code/Config/default_config.yaml
 config/
 *.env
 .env*
 
+# Exclude processing metadata and session files
+processing_metadata_*.json
+session_*.json
+
 # Exclude log files
 *.log
+Code/**/*.log
+master_processor_*.log
+transcript_analyzer_*.log
 
 # Exclude Python cache files
 __pycache__/
@@ -31,6 +57,8 @@ __pycache__/
 *.temp
 temp/
 tmp/
+.working/
+working_*
 
 # Exclude backup files
 *.bak
