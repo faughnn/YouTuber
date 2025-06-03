@@ -1,0 +1,51 @@
+import re
+import json
+
+# Read the analysis file
+with open(r"c:\Users\nfaug\OneDrive - LIR\Desktop\YouTuber\Transcripts\Joe_Rogan_Experience\Joe Rogan Experience 2325 - Aaron Rodgers\Joe_Rogan_Experience_2325_TOP10_WORST.txt", 'r', encoding='utf-8') as f:
+    content = f.read()
+
+print(f"File length: {len(content)} characters")
+
+# Look for JSON markers
+json_start_pos = content.find('```json')
+json_end_pos = content.find('```', json_start_pos + 7)
+
+print(f"JSON start position: {json_start_pos}")
+print(f"JSON end position: {json_end_pos}")
+
+if json_start_pos != -1 and json_end_pos != -1:
+    # Extract the content between markers
+    json_start = content.find('\n', json_start_pos) + 1
+    json_content = content[json_start:json_end_pos].strip()
+    
+    print(f"JSON content length: {len(json_content)}")
+    print("First 200 characters:")
+    print(repr(json_content[:200]))
+    
+    # Try to parse
+    try:
+        data = json.loads(json_content)
+        print(f"Successfully parsed! Found {len(data)} segments")
+        
+        # Show first segment structure
+        if data:
+            print("\nFirst segment keys:")
+            print(list(data[0].keys()))
+            
+    except json.JSONDecodeError as e:
+        print(f"JSON Error at line {e.lineno}, column {e.colno}: {e.msg}")
+        
+        # Show context around error
+        lines = json_content.split('\n')
+        error_line = e.lineno - 1
+        start_line = max(0, error_line - 2)
+        end_line = min(len(lines), error_line + 3)
+        
+        print(f"\nContext around error (lines {start_line+1}-{end_line}):")
+        for i in range(start_line, end_line):
+            marker = " --> " if i == error_line else "     "
+            line_content = lines[i] if i < len(lines) else ''
+            print(f"{marker}Line {i+1}: {repr(line_content)}")
+else:
+    print("Could not find JSON markers")

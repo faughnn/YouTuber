@@ -1,0 +1,58 @@
+# Exclude large media and data files
+Audio Rips/
+Video Rips/
+Transcripts/
+
+# Exclude configuration files with sensitive data
+Scripts/config/default_config.yaml
+config/
+*.env
+.env*
+
+# Exclude log files
+*.log
+
+# Exclude Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+
+# Exclude IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Exclude temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Exclude backup files
+*.bak
+*.backup
+*~
+
+# Exclude system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Exclude OS-specific files
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Exclude package manager files
+node_modules/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Exclude virtual environment
+venv/
+env/
+.venv/

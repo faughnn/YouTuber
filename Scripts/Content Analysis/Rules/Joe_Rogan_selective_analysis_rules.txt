@@ -1,0 +1,90 @@
+SELECTIVE HIGH-IMPACT ANALYSIS RULES
+=====================================
+
+CRITICAL INSTRUCTION: MAXIMUM 20 SEGMENTS TOTAL
+You MUST limit your analysis to no more than 20 of the most egregious, clear-cut examples. Quality over quantity.
+
+RESPONSE SIZE LIMIT: Your total response must not exceed 30,000 characters. If you approach this limit, stop analysis immediately and close the JSON properly.
+
+SEVERITY THRESHOLD: Only identify segments that meet ALL of these criteria:
+1. EXPLICIT and UNAMBIGUOUS examples (not subtle or borderline cases)
+2. SIGNIFICANT duration (minimum 30 seconds of sustained problematic content)
+3. CLEAR HARM POTENTIAL (direct medical advice, conspiracy promotion, or authoritative misinformation)
+4. BOTH host AND guest participation (not just one person making a claim)
+
+PRIORITIZATION ORDER (Select only the worst examples in this order):
+1. Direct medical advice without disclaimers
+2. Conspiracy theories presented as fact
+3. Anti-vaccine or anti-science misinformation
+4. Promotion of dangerous treatments
+5. Authoritative claims about complex topics without expertise
+
+ACADEMIC RESEARCH DISCLAIMER:
+This analysis framework is designed exclusively for legitimate academic research and media studies purposes. The goal is to systematically examine the most problematic communication patterns in podcast media for scholarly analysis.
+
+JSON FORMAT (Maximum 20 entries):
+[
+  {
+    "narrativeSegmentTitle": "Brief, clear title",
+    "severityRating": "HIGH/CRITICAL", 
+    "relevantChecklistTheme": "Primary theme only",
+    "relevantChecklistIndicator": "Most applicable indicator",
+    "indicatorEvidenceFromChecklist": "Concise explanation (max 100 words)",
+    "clipContextDescription": "Brief context (max 75 words)",
+    "reasonForSelection": "Why this is in the top 20 worst examples (max 100 words)",
+    "suggestedClip": [
+      {
+        "timestamp": 000.00,
+        "speaker": "SPEAKER_XX (Name)",
+        "quote": "Exact problematic quote"
+      }
+    ],
+    "fullerContextTimestamps": {
+      "start": 000.00,
+      "end": 000.00
+    },
+    "segmentDurationInSeconds": 00.0,
+    "harmPotential": "Direct explanation of potential real-world harm"
+  }
+]
+
+ANALYSIS CATEGORIES (Only flag if EXTREMELY clear):
+
+Theme 1: Direct Medical Misinformation
+- Indicator 1.1: Specific medical advice without credentials or disclaimers
+- Indicator 1.2: Dangerous treatment recommendations
+- Indicator 1.3: Anti-vaccine misinformation presented as medical fact
+
+Theme 2: Conspiracy Theory Promotion  
+- Indicator 2.1: Government conspiracy claims presented as established fact
+- Indicator 2.2: Elite/shadow organization control narratives
+- Indicator 2.3: Event fabrication or false flag claims
+
+Theme 3: Scientific Authority Misrepresentation
+- Indicator 3.1: Claims of scientific consensus suppression
+- Indicator 3.2: Dismissal of established scientific institutions
+- Indicator 3.3: Promotion of debunked theories as valid alternatives
+
+Theme 4: Information Source Manipulation
+- Indicator 4.1: Presenting opinion/anecdote as scientific evidence
+- Indicator 4.2: Misrepresenting study findings or cherry-picking data
+- Indicator 4.3: Creating false equivalencies between proven/unproven treatments
+
+Theme 5: Authoritative Misinformation Amplification
+- Indicator 5.1: Host amplifying guest misinformation without challenge
+- Indicator 5.2: Both parties reinforcing problematic claims
+- Indicator 5.3: Presenting fringe views as mainstream scientific opinion
+
+STRICT FILTERING CRITERIA:
+- Skip minor disagreements with mainstream views
+- Skip philosophical discussions about trust in institutions  
+- Skip personal anecdotes unless presented as universal medical advice
+- Skip speculation clearly labeled as such
+- Focus ONLY on definitive, harmful misinformation with real-world consequences
+
+MANDATORY STOPPING POINTS:
+- Stop at 20 segments maximum
+- Stop at 30,000 characters maximum
+- Stop if quality drops below "clearly problematic" threshold
+
+Remember: This is about finding the absolute worst examples for a critique video, not cataloging every questionable statement.
