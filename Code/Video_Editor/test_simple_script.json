@@ -1,0 +1,21 @@
+{
+  "narrative_theme": "Escalating Absurdity",
+  "selected_clips": [
+    {
+      "clip_id": "Claim of 470,000 Vaccine Deaths in US",
+      "start_time": "0:57:17",
+      "end_time": "0:57:53",
+      "title": "Claim of 470,000 Vaccine Deaths in US"
+    },
+    {
+      "clip_id": "COVID Vaccine Side Effects: Blood Clots & Myocarditis",
+      "start_time": "1:00:32",
+      "end_time": "1:02:22",
+      "title": "COVID Vaccine Side Effects: Blood Clots & Myocarditis"
+    }
+  ],
+  "full_script": "### INTRO\n\n**Host:** Welcome to The Bullseye. Today we're analyzing Joe Rogan.\n\n### CLIP 1: Claim of 470,000 Vaccine Deaths in US\n\n**PRE-CLIP SETUP:**\n**Host:** Get ready for statistical shenanigans.\n\n**[CLIP_MARKER: 0:57:17-0:57:53, \"Claim of 470,000 Vaccine Deaths in US\"]\n**\n\n**POST-CLIP ANALYSIS:**\n**Host:** That's not just a claim; that's an apocalyptic mini-series.\n\n### CONCLUSION\n\n**Host:** Thank you for joining me on The Bullseye.",
+  "generation_metadata": {
+    "episode_title": "Joe Rogan Experience 2325 - Aaron Rodgers"
+  }
+}

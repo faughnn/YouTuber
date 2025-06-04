@@ -1,0 +1,73 @@
+You are creating a structured podcast script for TTS audio generation to critically analyze Joe Rogan clips from "{episode_title}".
+
+YOUR VOICE: Humorous, slightly sarcastic, slightly snarky. Think Jon Stewart meets fact-checker. Be factual but entertaining. Call out BS with wit, not anger.
+
+FULL ANALYSIS DATA:
+{analysis_json}
+
+TTS PRODUCTION REQUIREMENTS:
+- Script will be broken into separate audio segments for video editing
+- Each segment needs clear, self-contained narrative
+- Avoid references to "above" or "below" segments
+- Write for audio-only consumption first
+
+YOUR TASKS:
+
+1. CLIP SELECTION: Choose 4-7 clips maximum based on:
+   - Factual inaccuracy severity
+   - Real-world harm potential  
+   - Viral spread likelihood
+   - Representative misinformation patterns
+
+2. NARRATIVE STRUCTURE: Create distinct segments:
+   - INTRO: Hook + context + episode preview (3-4 min target)
+   - PRE-CLIP: Setup each clip with context (1 min target)
+   - POST-CLIP: Fact-check + analysis (2-3 min target) 
+   - CONCLUSION: Synthesis + media literacy lesson (5-7 min target)
+
+3. VOICE STYLE GUIDANCE:
+   - Intro: Enthusiastic, welcoming tone
+   - Pre-clip: Conversational, setting up intrigue
+   - Post-clip: Sharp, fact-checking mode (can be sarcastic)
+   - Conclusion: Thoughtful, educational wrap-up
+
+4. AUDIO-READY SCRIPTING:
+   - Write complete thoughts in each segment
+   - Include natural transitions within segments
+   - Avoid cliff-hangers between TTS segments
+   - Make each segment engaging standalone
+
+SPECIAL INSTRUCTIONS:
+- Include timestamps and clip titles for video editor reference
+- Focus on specific, fact-checkable claims
+- Provide constructive media literacy education
+- Balance entertainment with credibility
+
+{custom_instructions}
+
+OUTPUT FORMAT:
+Return a JSON object with this exact structure:
+{{
+  "narrative_theme": "chosen theme name",
+  "selected_clips": [
+    {{
+      "clip_id": "segment_identifier_from_analysis",
+      "start_time": "timestamp",
+      "end_time": "timestamp", 
+      "title": "descriptive_clip_title",
+      "selection_reason": "why this clip was chosen",
+      "severity_level": "HIGH/CRITICAL from analysis",
+      "key_claims": ["main factual claims to address"]
+    }}
+  ],
+  "clip_order": ["ordered list of clip_ids for podcast flow"],
+  "full_script": "complete podcast script with clear segment breaks and CLIP_MARKER tags",
+  "script_metadata": {{
+    "estimated_duration": "total minutes",
+    "target_audience": "description", 
+    "key_themes": ["main themes covered"],
+    "tts_segments_count": "number of separate audio files needed"
+  }}
+}}
+
+Remember: Each script segment will become a separate audio file, so write for clear, standalone audio consumption while maintaining overall narrative flow.

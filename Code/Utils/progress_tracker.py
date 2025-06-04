@@ -18,6 +18,10 @@ class ProcessingStage(Enum):
     CONTENT_ANALYSIS = "content_analysis"
     FILE_ORGANIZATION = "file_organization"
     PODCAST_GENERATION = "podcast_generation"
+    AUDIO_GENERATION = "audio_generation"
+    VIDEO_CLIP_EXTRACTION = "video_clip_extraction"
+    VIDEO_TIMELINE_BUILDING = "video_timeline_building"
+    FINAL_VIDEO_ASSEMBLY = "final_video_assembly"
 
 
 @dataclass

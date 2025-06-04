@@ -1,0 +1,59 @@
+{
+  "episode_info": {
+    "title": "Joe Rogan Experience 2325 - Aaron Rodgers Analysis",
+    "episode_number": "001",
+    "initials": "AR",
+    "source_video": "Joe Rogan Experience 2325 - Aaron Rodgers.mp4",
+    "estimated_total_duration": "28 minutes"
+  },
+  "script_structure": {
+    "intro": {
+      "script": "Welcome to another episode where we dive deep into...",
+      "voice_style": "enthusiastic",
+      "audio_filename": "intro_001_AR.wav",
+      "estimated_duration": "3-4 minutes",
+      "video_instruction": "Show intro graphics, host avatar"
+    },
+    "clip_segments": [
+      {
+        "segment_index": 1,
+        "pre_clip": {
+          "script": "First up, we're going to hear Aaron Rodgers make a claim about...",
+          "voice_style": "normal", 
+          "audio_filename": "pre_clip_001_001_claim_470k_vaccine_deaths_AR.wav",
+          "estimated_duration": "1 minute",
+          "video_instruction": "Show setup graphics, prepare for clip"
+        },
+        "clip_reference": {
+          "clip_id": "claim_470k_vaccine_deaths",
+          "title": "Claim of 470,000 Vaccine Deaths in US",
+          "start_time": "0:57:17",
+          "end_time": "0:57:53", 
+          "video_filename": "[CRITICAL]_01_Claim_470k_Vaccine_Deaths.mp4",
+          "estimated_duration": "36 seconds"
+        },
+        "post_clip": {
+          "script": "So let's break this down. The actual data from VAERS shows...",
+          "voice_style": "sarcastic",
+          "audio_filename": "post_clip_001_001_claim_470k_vaccine_deaths_AR.wav", 
+          "estimated_duration": "2-3 minutes",
+          "video_instruction": "Show fact-checking graphics, sources"
+        }
+      }
+    ],
+    "outro": {
+      "script": "That wraps up today's analysis. Remember to always...",
+      "voice_style": "normal",
+      "audio_filename": "conclusion_001_AR.wav",
+      "estimated_duration": "5-7 minutes", 
+      "video_instruction": "Show conclusion graphics, call to action"
+    }
+  },
+  "generation_metadata": {
+    "script_generation_timestamp": "2025-01-27T10:30:00Z",
+    "tts_config_used": "Algenib voice, 24kHz WAV",
+    "video_clips_source": "analysis_video_clipper.py output",
+    "total_audio_segments": 9,
+    "narrative_theme": "Medical Misinformation Deep-Dive"
+  }
+}

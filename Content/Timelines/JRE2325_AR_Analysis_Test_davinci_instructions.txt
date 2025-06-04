@@ -1,0 +1,20 @@
+DaVinci Resolve Project Instructions
+========================================
+Project: Joe Rogan Experience 2325 - Aaron Rodgers Analysis
+Total Duration: 210.0 seconds
+
+Timeline Assembly Order:
+1. AUDIO: None
+2. AUDIO: None
+3. VIDEO: C:\Users\nfaug\OneDrive - LIR\Desktop\YouTuber\Content\Video_Clips/vaccine_deaths_claim.mp4
+4. AUDIO: None
+5. AUDIO: None
+6. VIDEO: C:\Users\nfaug\OneDrive - LIR\Desktop\YouTuber\Content\Video_Clips/vaccine_side_effects.mp4
+7. AUDIO: None
+8. AUDIO: None
+
+Audio Files to Import:
+
+Video Files Needed:
+  vaccine_deaths_claim.mp4
+  vaccine_side_effects.mp4

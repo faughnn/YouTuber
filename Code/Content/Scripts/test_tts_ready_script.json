@@ -1,0 +1,38 @@
+{
+  "episode_info": {
+    "title": "Joe Rogan Experience 2325 - Aaron Rodgers Test",
+    "episode_number": "001",
+    "initials": "AR",
+    "source_video": "Joe Rogan Experience 2325 - Aaron Rodgers Test.mp4",
+    "estimated_total_duration": "unknown"
+  },
+  "script_structure": {
+    "intro": {
+      "script": "```json\n{\n\"narrative_theme\": \"Navigating the Infodemic: Unpacking Joe Rogan's Latest\",\n\"selected_clips\": [\n{",
+      "voice_style": "enthusiastic",
+      "audio_filename": "intro_001_AR.wav",
+      "estimated_duration": "3-4 minutes",
+      "video_instruction": "Show intro graphics, host avatar"
+    },
+    "clip_segments": [],
+    "outro": {
+      "script": "],\n\"tts_segments_count\": 6\n}\n}\n```",
+      "voice_style": "normal",
+      "audio_filename": "conclusion_001_AR.wav",
+      "estimated_duration": "5-7 minutes",
+      "video_instruction": "Show conclusion graphics, call to action"
+    }
+  },
+  "generation_metadata": {
+    "script_generation_timestamp": "2025-06-04T11:27:55.014580",
+    "tts_config_used": "Algenib voice, 24kHz WAV",
+    "video_clips_source": "analysis_video_clipper.py output",
+    "total_audio_segments": 2,
+    "narrative_theme": "Generated Script",
+    "base_script_metadata": {
+      "estimated_duration": "unknown",
+      "target_audience": "general",
+      "key_themes": []
+    }
+  }
+}

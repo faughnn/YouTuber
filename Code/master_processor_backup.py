@@ -34,7 +34,7 @@ from Utils.file_organizer import FileOrganizer
 # Import existing processing modules
 try:
     from Extraction.youtube_audio_extractor import download_audio
-    from Extraction.youtube_video_downloader import download_video as download_youtube_video
+    from Extraction.youtube_video_downloader import YouTubeVideoDownloader
     from Extraction.audio_diarizer import diarize_audio, sanitize_audio_filename, extract_channel_name
     # Import from Content_Analysis directory
     import importlib.util
@@ -80,19 +80,16 @@ try:
     video_assembler_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(video_assembler_module)
     VideoAssembler = video_assembler_module.VideoAssembler
-      # Import TTS generator from the new TTS module
-    try:
-        from TTS.core.tts_generator import SimpleTTSGenerator
-    except ImportError:
-        # Fallback to legacy import location
-        tts_generator_path = os.path.join(script_dir, "Content_Analysis", "simple_tts_generator.py")
-        if os.path.exists(tts_generator_path):
-            spec = importlib.util.spec_from_file_location("simple_tts_generator", tts_generator_path)
-            tts_generator_module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(tts_generator_module)
-            SimpleTTSGenerator = tts_generator_module.SimpleTTSGenerator
-        else:
-            SimpleTTSGenerator = None
+    
+    # Import TTS generator for backward compatibility
+    tts_generator_path = os.path.join(script_dir, "Content_Analysis", "simple_tts_generator.py")
+    if os.path.exists(tts_generator_path):
+        spec = importlib.util.spec_from_file_location("simple_tts_generator", tts_generator_path)
+        tts_generator_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tts_generator_module)
+        SimpleTTSGenerator = tts_generator_module.SimpleTTSGenerator
+    else:
+        SimpleTTSGenerator = None
 except ImportError as e:
     print(f"Error importing processing modules: {e}")
     print("Make sure you're running this script from the Scripts directory.")
@@ -311,7 +308,7 @@ class MasterProcessor:
         except Exception as e:
             self.progress_tracker.fail_stage(ProcessingStage.INPUT_VALIDATION, str(e))
             raise
-    def _stage_2_audio_acquisition(self, input_info: Dict[str, Any]) -> Dict[str, str]:
+      def _stage_2_audio_acquisition(self, input_info: Dict[str, Any]) -> Dict[str, str]:
         """Stage 2: Audio & Video Acquisition."""
         self.progress_tracker.start_stage(ProcessingStage.AUDIO_ACQUISITION, estimated_duration=120)
         self.logger.info("Starting audio and video acquisition")
@@ -322,7 +319,8 @@ class MasterProcessor:
             if input_info['type'] == 'youtube_url':
                 # Download audio from YouTube
                 self.progress_tracker.update_stage_progress(10, "Downloading audio from YouTube")
-                  # Use retry mechanism for YouTube download
+                
+                # Use retry mechanism for YouTube download
                 audio_path = self.error_handler.retry_with_backoff(
                     download_audio,
                     input_info['info']['url'],
@@ -338,7 +336,11 @@ class MasterProcessor:
                 # Download video if enabled in config (default: true)
                 if self.config.get('video', {}).get('always_download_video', True):
                     self.progress_tracker.update_stage_progress(40, "Downloading video from YouTube")
+                    
                     try:
+                        # Initialize video downloader
+                        video_downloader = YouTubeVideoDownloader()
+                        
                         # Extract episode name from audio file for consistent naming
                         audio_basename = os.path.splitext(os.path.basename(audio_path))[0]
                         episode_folder = os.path.join(
@@ -349,10 +351,12 @@ class MasterProcessor:
                         # Create episode folder if it doesn't exist
                         os.makedirs(episode_folder, exist_ok=True)
                         
-                        # Download video with retry mechanism using the function
+                        # Download video with retry mechanism
                         video_path = self.error_handler.retry_with_backoff(
-                            download_youtube_video,
+                            video_downloader.download_video,
                             input_info['info']['url'],
+                            output_dir=episode_folder,
+                            quality=self.config.get('video', {}).get('video_quality', '720p'),
                             stage="video_acquisition",
                             context="YouTube video download"
                         )
@@ -415,7 +419,7 @@ class MasterProcessor:
         except Exception as e:
             self.progress_tracker.fail_stage(ProcessingStage.AUDIO_ACQUISITION, str(e))
             raise
-    def _stage_3_transcript_generation(self, acquisition_results: Dict[str, str]) -> str:
+      def _stage_3_transcript_generation(self, acquisition_results: Dict[str, str]) -> str:
         """Stage 3: Transcript Generation."""
         audio_path = acquisition_results['audio_path']
         self.progress_tracker.start_stage(ProcessingStage.TRANSCRIPT_GENERATION, estimated_duration=300)
@@ -748,7 +752,7 @@ ANALYSIS RESULTS:
             self.progress_tracker.fail_stage(ProcessingStage.PODCAST_GENERATION, str(e))
             self.logger.error(f"Podcast generation failed: {e}")
             return None
-    def _stage_7_audio_generation(self, podcast_script_path: str, episode_title: str) -> Optional[str]:
+      def _stage_7_audio_generation(self, podcast_script_path: str, episode_title: str) -> Optional[str]:
         """Stage 7: Generate Audio from Podcast Script using TTS."""
         self.progress_tracker.start_stage(ProcessingStage.AUDIO_GENERATION, estimated_duration=60)
         self.logger.info("Starting audio generation from podcast script")
@@ -987,8 +991,7 @@ ANALYSIS RESULTS:
                 
         except Exception as e:
             self.progress_tracker.fail_stage(ProcessingStage.FINAL_VIDEO_ASSEMBLY, str(e))
-            self.logger.error(f"Final video assembly failed: {e}")            
-            return None
+            self.logger.error(f"Final video assembly failed: {e}")            return None
     
     def process_single_input(self, input_str: str, analysis_rules_file: Optional[str] = None, 
                            skip_existing: bool = False, generate_podcast: bool = False,
@@ -1240,12 +1243,12 @@ Examples:
         action='store_true',
         help='Show what would be processed without executing'
     )
+    
     parser.add_argument(
         '--generate-podcast',
         action='store_true',
         help='Generate podcast script from analysis results'
     )
-    
     parser.add_argument(
         '--podcast-template',
         type=str,
@@ -1256,20 +1259,7 @@ Examples:
     parser.add_argument(
         '--generate-audio',
         action='store_true',
-        help='Generate audio from podcast script using TTS (requires --generate-podcast)'
-    )
-    
-    # Video processing options
-    parser.add_argument(
-        '--generate-video',
-        action='store_true',
-        help='Generate video from podcast script and analysis (enables full pipeline: Stages 1-10)'
-    )
-    
-    parser.add_argument(
-        '--full-pipeline',
-        action='store_true',
-        help='Run complete 10-stage pipeline including video generation'
+        help='Generate audio from podcast script using Gemini TTS (requires --generate-podcast)'
     )
     
     return parser
@@ -1288,24 +1278,16 @@ def main():
     if args.gpu and args.cpu:
         print("Error: Cannot specify both --gpu and --cpu")
         sys.exit(1)
+    
     if args.generate_audio and not args.generate_podcast:
         print("Error: --generate-audio requires --generate-podcast to be enabled")
         sys.exit(1)
     
-    if args.generate_video and not args.generate_podcast:
-        print("Error: --generate-video requires --generate-podcast to be enabled")
-        sys.exit(1)
-    
-    if args.full_pipeline:
-        # Full pipeline implies all generation options
-        args.generate_podcast = True
-        args.generate_audio = True
-        args.generate_video = True
-    
     try:
         # Initialize processor
         processor = MasterProcessor(config_path=args.config)
-          # Apply command line overrides
+        
+        # Apply command line overrides
         if args.whisper_model:
             processor.config['processing']['whisper_model'] = args.whisper_model
         
@@ -1316,7 +1298,7 @@ def main():
             processor.config['logging']['level'] = 'DEBUG'
             processor.logger.setLevel(logging.DEBUG)
         
-        print(f">> Master Processor Starting")
+        print(f"🚀 Master Processor Starting")
         print(f"Session ID: {processor.session_id}")
         print(f"Configuration: {args.config or 'default'}")
         print("")
@@ -1343,22 +1325,15 @@ def main():
                 args.skip_existing,
                 args.generate_podcast,
                 args.podcast_template,
-                args.generate_audio,
-                args.generate_video,
-                args.full_pipeline            )
-            print("\n[SUCCESS] Processing Complete!")
+                args.generate_audio
+            )
+            print("\n🎉 Processing Complete!")
             print(f"Transcript: {result['transcript_path']}")
             print(f"Analysis: {result['analysis_path']}")
             if 'podcast_script_path' in result:
                 print(f"Podcast Script: {result['podcast_script_path']}")
             if 'podcast_audio_path' in result:
                 print(f"Podcast Audio: {result['podcast_audio_path']}")
-            if 'video_clips_path' in result:
-                print(f"Video Clips: {result['video_clips_path']}")
-            if 'timeline_path' in result:
-                print(f"Timeline: {result['timeline_path']}")
-            if 'final_video_path' in result:
-                print(f"[VIDEO] Final Video: {result['final_video_path']}")
         
         # Show final progress
         print("\n" + processor.progress_tracker.get_progress_display())
@@ -1366,15 +1341,15 @@ def main():
         # Show error summary if any errors occurred
         error_summary = processor.error_handler.get_error_summary()
         if error_summary['total_errors'] > 0:
-            print("\n[WARNING] Errors occurred during processing:")
+            print("\n⚠️ Errors occurred during processing:")
             print(processor.error_handler.format_error_report())
         
     except KeyboardInterrupt:
-        print("\n\n[INTERRUPTED] Processing interrupted by user")
+        print("\n\n⏹️ Processing interrupted by user")
         sys.exit(1)
-        
+    
     except Exception as e:
-        print(f"\n[ERROR] Fatal error: {e}")
+        print(f"\n❌ Fatal error: {e}")
         logging.getLogger().error(f"Fatal error: {e}", exc_info=True)
         sys.exit(1)
 

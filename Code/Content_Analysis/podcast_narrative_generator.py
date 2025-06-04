@@ -5,6 +5,7 @@ from typing import Dict, List, Any, Optional
 import yaml
 from datetime import datetime
 import logging
+import re
 
 class PromptLoader:
     """Handle loading and formatting of prompt templates"""
@@ -205,27 +206,309 @@ class PodcastNarrativeGenerator:
                 variations[template] = {"error": str(e)}
         
         return variations
+    
+    def generate_tts_ready_script(
+        self, 
+        analysis_json_path: str, 
+        episode_title: str,
+        episode_number: str = "001",
+        initials: str = "TBD",
+        prompt_template: str = "tts_podcast_narrative_prompt.txt",
+        custom_instructions: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Generate TTS-ready podcast script with structured audio segments
+        
+        Args:
+            analysis_json_path: Path to the analysis JSON file
+            episode_title: Title of the episode
+            episode_number: Episode number for filename generation
+            initials: Guest initials for filename generation
+            prompt_template: Name of TTS-specific prompt template
+            custom_instructions: Additional instructions
+            
+        Returns:
+            Dictionary containing TTS-ready script structure with audio filenames
+        """
+        
+        self.logger.info(f"Generating TTS-ready script for: {episode_title}")
+        
+        # First generate the base script using existing method
+        base_script = self.generate_podcast_script(
+            analysis_json_path, episode_title, prompt_template, custom_instructions
+        )
+        
+        # Load analysis data for clip information
+        with open(analysis_json_path, 'r', encoding='utf-8') as f:
+            analysis_data = json.load(f)
+        
+        # Transform to TTS-ready format
+        tts_script = self._transform_to_tts_format(
+            base_script, analysis_data, episode_number, initials
+        )
+        
+        return tts_script
+    
+    def _transform_to_tts_format(
+        self, 
+        base_script: Dict, 
+        analysis_data: Dict, 
+        episode_number: str,
+        initials: str
+    ) -> Dict[str, Any]:
+        """
+        Transform base script to TTS-ready format with audio filenames and structure
+        """
+        
+        # Extract episode info
+        episode_info = {
+            "title": base_script.get("generation_metadata", {}).get("episode_title", "Unknown Episode"),
+            "episode_number": episode_number,
+            "initials": initials,
+            "source_video": f"{base_script.get('generation_metadata', {}).get('episode_title', 'Unknown')}.mp4",
+            "estimated_total_duration": base_script.get("script_metadata", {}).get("estimated_duration", "25-30 minutes")
+        }
+        
+        # Voice style mapping based on segment type
+        voice_styles = {
+            "intro": "enthusiastic",
+            "pre_clip": "normal", 
+            "post_clip": "sarcastic",  # For fact-checking
+            "outro": "normal"
+        }
+        
+        # Parse the full script to extract segments
+        full_script = base_script.get("full_script", "")
+        clip_segments = []
+        
+        # Extract selected clips info
+        selected_clips = base_script.get("selected_clips", [])
+        
+        for i, clip in enumerate(selected_clips, 1):
+            # Generate safe filename from clip_id
+            safe_clip_name = self._make_safe_filename(clip.get("clip_id", f"clip_{i}"))
+            
+            segment = {
+                "segment_index": i,
+                "pre_clip": {
+                    "script": f"Next, we're analyzing {clip.get('title', f'Clip {i}')}...",
+                    "voice_style": voice_styles["pre_clip"],
+                    "audio_filename": f"pre_clip_{i:03d}_{episode_number}_{safe_clip_name}_{initials}.wav",
+                    "estimated_duration": "1 minute",
+                    "video_instruction": "Show setup graphics, prepare for clip"
+                },
+                "clip_reference": {
+                    "clip_id": clip.get("clip_id", f"clip_{i}"),
+                    "title": clip.get("title", f"Clip {i}"),
+                    "start_time": clip.get("start_time", "0:00:00"),
+                    "end_time": clip.get("end_time", "0:00:30"),
+                    "video_filename": f"[{clip.get('severity_level', 'UNKNOWN')}]_{i:02d}_{safe_clip_name}.mp4",
+                    "estimated_duration": self._calculate_clip_duration(
+                        clip.get("start_time", "0:00:00"), 
+                        clip.get("end_time", "0:00:30")
+                    )
+                },
+                "post_clip": {
+                    "script": f"Let's fact-check what we just heard about {clip.get('title', 'this topic')}...",
+                    "voice_style": voice_styles["post_clip"],
+                    "audio_filename": f"post_clip_{i:03d}_{episode_number}_{safe_clip_name}_{initials}.wav",
+                    "estimated_duration": "2-3 minutes", 
+                    "video_instruction": "Show fact-checking graphics, sources"
+                }
+            }
+            clip_segments.append(segment)
+        
+        # Build structured TTS script
+        tts_script = {
+            "episode_info": episode_info,
+            "script_structure": {
+                "intro": {
+                    "script": self._extract_intro_from_script(full_script),
+                    "voice_style": voice_styles["intro"],
+                    "audio_filename": f"intro_{episode_number}_{initials}.wav",
+                    "estimated_duration": "3-4 minutes",
+                    "video_instruction": "Show intro graphics, host avatar"
+                },
+                "clip_segments": clip_segments,
+                "outro": {
+                    "script": self._extract_outro_from_script(full_script),
+                    "voice_style": voice_styles["outro"], 
+                    "audio_filename": f"conclusion_{episode_number}_{initials}.wav",
+                    "estimated_duration": "5-7 minutes",
+                    "video_instruction": "Show conclusion graphics, call to action"
+                }
+            },
+            "generation_metadata": {
+                "script_generation_timestamp": datetime.now().isoformat(),
+                "tts_config_used": "Algenib voice, 24kHz WAV",
+                "video_clips_source": "analysis_video_clipper.py output",
+                "total_audio_segments": 2 + (len(clip_segments) * 2),  # intro + outro + pre/post for each clip
+                "narrative_theme": base_script.get("narrative_theme", "Content Analysis"),
+                "base_script_metadata": base_script.get("script_metadata", {})
+            }
+        }
+        
+        return tts_script
+    
+    def _make_safe_filename(self, text: str) -> str:
+        """Make a string safe for use in filenames"""
+        # Remove special characters and spaces
+        safe = re.sub(r'[^\w\s-]', '', text)
+        safe = re.sub(r'[-\s]+', '_', safe)
+        return safe.lower()[:30]  # Limit length
+    
+    def _calculate_clip_duration(self, start_time: str, end_time: str) -> str:
+        """Calculate duration between two timestamp strings"""
+        try:
+            # Simple duration calculation for MM:SS or HH:MM:SS format
+            def time_to_seconds(time_str):
+                parts = time_str.split(':')
+                if len(parts) == 2:  # MM:SS
+                    return int(parts[0]) * 60 + int(parts[1])
+                elif len(parts) == 3:  # HH:MM:SS
+                    return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+                return 0
+            
+            start_seconds = time_to_seconds(start_time)
+            end_seconds = time_to_seconds(end_time)
+            duration_seconds = end_seconds - start_seconds
+            
+            if duration_seconds < 60:
+                return f"{duration_seconds} seconds"
+            else:
+                minutes = duration_seconds // 60
+                seconds = duration_seconds % 60
+                return f"{minutes}:{seconds:02d}"
+        except:
+            return "Unknown duration"
+    
+    def _extract_intro_from_script(self, full_script: str) -> str:
+        """Extract intro section from full script"""
+        # Look for intro markers or take first few paragraphs
+        lines = full_script.split('\n')
+        intro_lines = []
+        
+        for line in lines[:10]:  # Take first 10 lines as intro
+            if line.strip() and not line.startswith('[CLIP_MARKER'):
+                intro_lines.append(line.strip())
+            if len(intro_lines) >= 5:  # Reasonable intro length
+                break
+                
+        return '\n'.join(intro_lines) if intro_lines else "Welcome to our analysis episode..."
+    
+    def _extract_outro_from_script(self, full_script: str) -> str:
+        """Extract outro section from full script"""
+        # Look for conclusion markers or take last few paragraphs
+        lines = full_script.split('\n')
+        outro_lines = []
+        
+        # Look for conclusion markers or take last non-empty lines
+        for line in reversed(lines[-15:]):  # Check last 15 lines
+            if line.strip() and not line.startswith('[CLIP_MARKER'):
+                outro_lines.insert(0, line.strip())
+            if len(outro_lines) >= 5:  # Reasonable outro length
+                break
+                
+        return '\n'.join(outro_lines) if outro_lines else "That concludes our analysis. Thanks for listening..."
+
+    def save_tts_ready_script(self, tts_script: Dict, output_path: str) -> Path:
+        """
+        Save TTS-ready script in the ideal format
+        
+        Returns:
+            Path to saved TTS script file
+        """
+        output_path = Path(output_path)
+        
+        # Save TTS-ready structured data
+        tts_path = output_path.with_suffix('.json')
+        with open(tts_path, 'w', encoding='utf-8') as f:
+            json.dump(tts_script, f, indent=2, ensure_ascii=False)
+        
+        self.logger.info(f"Saved TTS-ready script: {tts_path}")
+        
+        return tts_path
 
 # Example usage and testing
 if __name__ == "__main__":
-    # Test the generator
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Generate podcast scripts from analysis data")
+    parser.add_argument("--test-basic", action="store_true", help="Test basic script generation")
+    parser.add_argument("--test-tts", action="store_true", help="Test TTS-ready script generation")
+    parser.add_argument("--analysis-path", help="Path to analysis JSON file")
+    parser.add_argument("--episode-title", help="Episode title")
+    parser.add_argument("--episode-number", default="001", help="Episode number")
+    parser.add_argument("--initials", default="TBD", help="Guest initials")
+    
+    args = parser.parse_args()
+    
+    # Default test data
+    default_analysis_path = "Transcripts/Joe_Rogan_Experience/Joe Rogan Experience 2325 - Aaron Rodgers/Joe Rogan Experience 2325 - Aaron Rodgers_analysis_analysis.json"
+    default_episode_title = "Joe Rogan Experience 2325 - Aaron Rodgers"
+    
+    analysis_path = args.analysis_path or default_analysis_path
+    episode_title = args.episode_title or default_episode_title
+    
     generator = PodcastNarrativeGenerator()
     
-    # Test with Joe Rogan 2325 analysis
-    analysis_path = "Transcripts/Joe_Rogan_Experience/Joe Rogan Experience 2325 - Aaron Rodgers/Joe Rogan Experience 2325 - Aaron Rodgers_analysis_analysis.json"
+    if args.test_tts:
+        # Test TTS-ready script generation
+        print("Testing TTS-ready script generation...")
+        
+        if Path(analysis_path).exists():
+            tts_script = generator.generate_tts_ready_script(
+                analysis_json_path=analysis_path,
+                episode_title=episode_title,
+                episode_number=args.episode_number,
+                initials=args.initials,
+                prompt_template="tts_podcast_narrative_prompt.txt"
+            )
+            
+            # Save TTS script
+            output_path = "test_tts_podcast_script"
+            tts_path = generator.save_tts_ready_script(tts_script, output_path)
+            
+            print(f"✅ TTS script generation completed!")
+            print(f"🎵 TTS Script: {tts_path}")
+            print(f"📊 Audio segments: {tts_script['generation_metadata']['total_audio_segments']}")
+            print(f"🎬 Clip segments: {len(tts_script['script_structure']['clip_segments'])}")
+        else:
+            print(f"❌ Analysis file not found: {analysis_path}")
     
-    if Path(analysis_path).exists():
-        script_data = generator.generate_podcast_script(
-            analysis_path,
-            "Joe Rogan Experience 2325 - Aaron Rodgers"
-        )
+    elif args.test_basic:
+        # Test basic script generation
+        print("Testing basic script generation...")
         
-        # Save the script
-        output_path = "test_podcast_script"
-        json_path, txt_path = generator.save_podcast_script(script_data, output_path)
-        
-        print(f"✅ Test completed successfully!")
-        print(f"📄 JSON: {json_path}")
-        print(f"📝 Script: {txt_path}")
+        if Path(analysis_path).exists():
+            script_data = generator.generate_podcast_script(
+                analysis_path,
+                episode_title
+            )
+            
+            # Save the script
+            output_path = "test_podcast_script"
+            json_path, txt_path = generator.save_podcast_script(script_data, output_path)
+            
+            print(f"✅ Basic script generation completed!")
+            print(f"📄 JSON: {json_path}")
+            print(f"📝 Script: {txt_path}")
+        else:
+            print(f"❌ Analysis file not found: {analysis_path}")
+    
     else:
-        print(f"❌ Analysis file not found: {analysis_path}")
+        print("Usage: python podcast_narrative_generator.py [--test-basic | --test-tts]")
+        print("")
+        print("Options:")
+        print("  --test-basic     Generate traditional podcast script")
+        print("  --test-tts       Generate TTS-ready structured script")
+        print("  --analysis-path  Path to analysis JSON file")
+        print("  --episode-title  Episode title")
+        print("  --episode-number Episode number (default: 001)")
+        print("  --initials       Guest initials (default: TBD)")
+        print("")
+        print("The TTS-ready script includes:")
+        print("- Structured audio segments with filenames")
+        print("- Voice style specifications")
+        print("- Video clip references")
+        print("- Integration points for video editor")
