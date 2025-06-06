@@ -30,15 +30,21 @@ class PromptLoader:
 class PodcastNarrativeGenerator:
     """Generate podcast scripts from analysis JSON using Gemini AI"""
     
-    def __init__(self, config_path: str = "Code/Config/default_config.yaml"):
+    def __init__(self, config_path: str = None):
+        # Default config path relative to the script location
+        if config_path is None:
+            config_path = Path(__file__).parent.parent / "Config" / "default_config.yaml"
+        
         # Load existing config
         with open(config_path, 'r') as f:
-            self.config = yaml.safe_load(f)        # Initialize Gemini
+            self.config = yaml.safe_load(f)
+        
+        # Initialize Gemini
         genai.configure(api_key=self.config['api']['gemini_api_key'])
         self.model = genai.GenerativeModel('gemini-2.5-flash-preview-05-20')
-        
-        # Initialize prompt loader
-        self.prompt_loader = PromptLoader("Code/Content_Analysis/Prompts/")
+          # Initialize prompt loader
+        prompts_dir = Path(__file__).parent / "Prompts"
+        self.prompt_loader = PromptLoader(str(prompts_dir))
         
         # Setup logging
         logging.basicConfig(level=logging.INFO)
@@ -66,10 +72,8 @@ class PodcastNarrativeGenerator:
         
         self.logger.info(f"Generating podcast script for: {episode_title}")
         self.logger.info(f"Using prompt template: {prompt_template}")
-        
-        # Load analysis data
-        with open(analysis_json_path, 'r', encoding='utf-8') as f:
-            analysis_data = json.load(f)
+          # Load analysis data (handle both JSON and text format)
+        analysis_data = self._load_analysis_data(analysis_json_path)
         
         # Build prompt from template
         narrative_prompt = self._build_prompt_from_template(
@@ -115,8 +119,7 @@ class PodcastNarrativeGenerator:
         # Add guest name if available
         if 'metadata' in analysis_data and 'guest' in analysis_data['metadata']:
             template_vars['guest_name'] = analysis_data['metadata']['guest']
-        
-        # Format template
+          # Format template
         formatted_prompt = self.prompt_loader.format_template(template, **template_vars)
         
         return formatted_prompt
@@ -129,20 +132,17 @@ class PodcastNarrativeGenerator:
             # Try to parse as JSON first
             parsed_response = json.loads(response_text)
             self.logger.info("Successfully parsed JSON response")
+            
+            # Check if it's already in TTS format
+            if "episode_info" not in parsed_response or "script_structure" not in parsed_response:
+                # Convert to TTS format
+                script_text = parsed_response.get('full_script', response_text)
+                parsed_response = self._convert_to_tts_format(script_text, episode_title)
+                
         except json.JSONDecodeError as e:
             self.logger.warning(f"Failed to parse JSON response: {e}")
-            # If not JSON, treat as plain text script
-            parsed_response = {
-                "narrative_theme": "Generated Script",
-                "selected_clips": [],
-                "clip_order": [],
-                "full_script": response_text,
-                "script_metadata": {
-                    "estimated_duration": "unknown",
-                    "target_audience": "general",
-                    "key_themes": []
-                }
-            }
+            # If not JSON, treat as plain text script and convert to TTS format
+            parsed_response = self._convert_to_tts_format(response_text, episode_title)
           # Add generation metadata
         parsed_response["generation_metadata"] = {
             "source_analysis": original_data[0] if isinstance(original_data, list) and original_data else {},
@@ -166,11 +166,15 @@ class PodcastNarrativeGenerator:
         json_path = output_path.with_suffix('.json')
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(script_data, f, indent=2, ensure_ascii=False)
-        
-        # Save readable script
+          # Save readable script
         script_path = output_path.with_suffix('.txt')
         with open(script_path, 'w', encoding='utf-8') as f:
-            f.write(script_data.get('full_script', ''))
+            # Extract script from TTS format or use full_script
+            if 'script_structure' in script_data and 'intro' in script_data['script_structure']:
+                script_text = script_data['script_structure']['intro'].get('script', '')
+            else:
+                script_text = script_data.get('full_script', '')
+            f.write(script_text)
         
         self.logger.info(f"Saved podcast script files:")
         self.logger.info(f"  JSON: {json_path}")
@@ -237,10 +241,8 @@ class PodcastNarrativeGenerator:
         base_script = self.generate_podcast_script(
             analysis_json_path, episode_title, prompt_template, custom_instructions
         )
-        
-        # Load analysis data for clip information
-        with open(analysis_json_path, 'r', encoding='utf-8') as f:
-            analysis_data = json.load(f)
+          # Load analysis data for clip information
+        analysis_data = self._load_analysis_data(analysis_json_path)
         
         # Transform to TTS-ready format
         tts_script = self._transform_to_tts_format(
@@ -428,6 +430,83 @@ class PodcastNarrativeGenerator:
         self.logger.info(f"Saved TTS-ready script: {tts_path}")
         
         return tts_path
+    
+    def _load_analysis_data(self, analysis_path: str) -> Dict[str, Any]:
+        """
+        Load analysis data from either JSON or text format files
+        
+        Args:
+            analysis_path: Path to analysis file (JSON or text with embedded JSON)
+            
+        Returns:
+            Dictionary containing the analysis data
+        """
+        try:
+            with open(analysis_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Try to parse as direct JSON first
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                self.logger.info("File is not direct JSON, attempting to extract embedded JSON")
+            
+            # If not direct JSON, look for JSON array in the content
+            # Find JSON array patterns
+            json_patterns = [
+                r'\[\s*\{.*?\}\s*\]',  # Array of objects
+                r'\{.*?\}',            # Single object
+            ]
+            
+            for pattern in json_patterns:
+                matches = re.findall(pattern, content, re.DOTALL)
+                for match in matches:
+                    try:
+                        parsed = json.loads(match)
+                        self.logger.info("Successfully extracted JSON from text format")
+                        return parsed if isinstance(parsed, list) else [parsed]
+                    except json.JSONDecodeError:
+                        continue
+              # Fail clearly if no valid JSON is found
+            error_msg = f"No valid JSON found in analysis file: {analysis_path}. The file must contain properly formatted JSON data for podcast generation."
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+            
+        except Exception as e:
+            self.logger.error(f"Error loading analysis data: {e}")
+            raise
+    
+    def _convert_to_tts_format(self, response_text: str, episode_title: str) -> Dict[str, Any]:
+        """
+        Convert plain text script to TTS-compatible format
+        """
+        # Extract episode number from title (simple approach)
+        import re
+        episode_match = re.search(r'(\d+)', episode_title)
+        episode_number = episode_match.group(1) if episode_match else "001"
+        
+        # Generate episode initials
+        words = episode_title.split()
+        initials = ''.join([word[0].upper() for word in words[:2]]) if len(words) >= 2 else "EP"
+        
+        return {
+            "episode_info": {
+                "title": episode_title,
+                "episode_number": episode_number,
+                "initials": initials,
+                "source_video": f"{episode_title}.mp4",
+                "estimated_total_duration": "20-25 minutes"
+            },
+            "script_structure": {
+                "intro": {
+                    "script": response_text,
+                    "voice_style": "normal",
+                    "audio_filename": f"full_script_{episode_number}_{initials}.wav",
+                    "estimated_duration": "20-25 minutes",
+                    "video_instruction": "Show podcast graphics"
+                }
+            }
+        }
 
 # Example usage and testing
 if __name__ == "__main__":

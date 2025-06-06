@@ -16,7 +16,6 @@ class ProcessingStage(Enum):
     AUDIO_ACQUISITION = "audio_acquisition"
     TRANSCRIPT_GENERATION = "transcript_generation"
     CONTENT_ANALYSIS = "content_analysis"
-    FILE_ORGANIZATION = "file_organization"
     PODCAST_GENERATION = "podcast_generation"
     AUDIO_GENERATION = "audio_generation"
     VIDEO_CLIP_EXTRACTION = "video_clip_extraction"
@@ -148,20 +147,24 @@ class ProgressTracker:
     def get_progress_display(self, input_description: str = "") -> str:
         """Generate a formatted progress display."""
         lines = []
-        
-        # Header
+          # Header
         if input_description:
             lines.append(f"🚀 Processing: {input_description}")
         else:
             lines.append("🚀 Processing...")
-          # Stage progress
+        
+        # Stage progress
         stage_icons = {
             ProcessingStage.INPUT_VALIDATION: "📋",
             ProcessingStage.AUDIO_ACQUISITION: "🎵",
             ProcessingStage.TRANSCRIPT_GENERATION: "📝",
             ProcessingStage.CONTENT_ANALYSIS: "🤖",
             ProcessingStage.FILE_ORGANIZATION: "📁",
-            ProcessingStage.PODCAST_GENERATION: "🎙️"
+            ProcessingStage.PODCAST_GENERATION: "🎙️",
+            ProcessingStage.AUDIO_GENERATION: "🔊",
+            ProcessingStage.VIDEO_CLIP_EXTRACTION: "✂️",
+            ProcessingStage.VIDEO_TIMELINE_BUILDING: "🎬",
+            ProcessingStage.FINAL_VIDEO_ASSEMBLY: "🎞️"
         }
         
         stage_names = {
@@ -170,7 +173,11 @@ class ProgressTracker:
             ProcessingStage.TRANSCRIPT_GENERATION: "Transcript generation",
             ProcessingStage.CONTENT_ANALYSIS: "Content analysis",
             ProcessingStage.FILE_ORGANIZATION: "File organization",
-            ProcessingStage.PODCAST_GENERATION: "Podcast generation"
+            ProcessingStage.PODCAST_GENERATION: "Podcast generation",
+            ProcessingStage.AUDIO_GENERATION: "Audio generation",
+            ProcessingStage.VIDEO_CLIP_EXTRACTION: "Video clip extraction",
+            ProcessingStage.VIDEO_TIMELINE_BUILDING: "Video timeline building",
+            ProcessingStage.FINAL_VIDEO_ASSEMBLY: "Final video assembly"
         }
         
         for stage in ProcessingStage:

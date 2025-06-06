@@ -1,0 +1,65 @@
+{
+  "mock_responses": {
+    "valid_video": {
+      "status": "success",
+      "data": {
+        "id": "dQw4w9WgXcQ",
+        "title": "Rick Astley - Never Gonna Give You Up (Official Music Video)",
+        "duration": 212,
+        "available": true,
+        "has_audio": true,
+        "uploader": "RickAstleyVEVO"
+      }
+    },
+    "private_video": {
+      "status": "error",
+      "error_code": "VIDEO_UNAVAILABLE",
+      "message": "This video is private"
+    },
+    "region_blocked": {
+      "status": "error", 
+      "error_code": "VIDEO_UNAVAILABLE",
+      "message": "Video not available in your country"
+    },
+    "deleted_video": {
+      "status": "error",
+      "error_code": "VIDEO_NOT_FOUND", 
+      "message": "Video has been removed"
+    },
+    "no_audio": {
+      "status": "success",
+      "data": {
+        "id": "test12345678",
+        "title": "Silent Video Test",
+        "duration": 60,
+        "available": true,
+        "has_audio": false,
+        "uploader": "TestChannel"
+      }
+    },
+    "network_timeout": {
+      "status": "error",
+      "error_code": "NETWORK_ERROR",
+      "message": "Connection timed out"
+    },
+    "api_error": {
+      "status": "error", 
+      "error_code": "API_ERROR",
+      "message": "YouTube API temporarily unavailable"
+    }
+  },
+  "http_responses": {
+    "timeout": {
+      "exception": "requests.exceptions.Timeout",
+      "message": "Request timed out"
+    },
+    "connection_error": {
+      "exception": "requests.exceptions.ConnectionError", 
+      "message": "Failed to establish connection"
+    },
+    "dns_error": {
+      "exception": "requests.exceptions.DNSError",
+      "message": "Name or service not known"
+    }
+  }
+}

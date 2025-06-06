@@ -287,6 +287,123 @@ def create_video_clips(video_path: Path, clips: List[Dict], output_dir: Path,
     
     return successful_clips
 
+def extract_clips_from_analysis(analysis_path: str, video_path: str, output_dir: str, 
+                              start_buffer: float = DEFAULT_START_BUFFER_SECONDS,
+                              end_buffer: float = DEFAULT_END_BUFFER_SECONDS) -> Dict:
+    """
+    Main function called by master processor to extract video clips from analysis.
+    
+    Args:
+        analysis_path: Path to the analysis file containing JSON segment data
+        video_path: Path to the source video file
+        output_dir: Directory where clips should be saved
+        start_buffer: Buffer time (seconds) to add before clip start
+        end_buffer: Buffer time (seconds) to add after clip end
+    
+    Returns:
+        Dict with success status, clip count, and output directory
+    """
+    try:
+        from pathlib import Path
+        
+        # Convert string paths to Path objects
+        analysis_file = Path(analysis_path)
+        video_file = Path(video_path)
+        clips_dir = Path(output_dir)
+        
+        # Validate inputs
+        if not video_file.exists():
+            return {
+                'success': False, 
+                'error': f'Video file not found: {video_file}',
+                'clips_created': 0,
+                'output_directory': str(clips_dir)
+            }
+        
+        if not analysis_file.exists():
+            return {
+                'success': False,
+                'error': f'Analysis file not found: {analysis_file}',
+                'clips_created': 0,
+                'output_directory': str(clips_dir)
+            }
+        
+        # Extract and parse analysis data
+        print(f"Reading analysis file: {analysis_file}")
+        analysis_data = extract_json_from_analysis_file(analysis_file)
+        if not analysis_data:
+            return {
+                'success': False,
+                'error': 'Could not extract valid JSON from analysis file',
+                'clips_created': 0,
+                'output_directory': str(clips_dir)
+            }
+        
+        print(f"Found {len(analysis_data)} segments in analysis file")
+        
+        # Parse segments into clips
+        clips = parse_analysis_segments(analysis_data)
+        if not clips:
+            return {
+                'success': False,
+                'error': 'No valid clips found in analysis data',
+                'clips_created': 0,
+                'output_directory': str(clips_dir)
+            }
+        
+        print(f"Generated {len(clips)} clips from {len(analysis_data)} segments")
+        
+        # Setup output directory
+        clips_dir.mkdir(parents=True, exist_ok=True)
+        
+        print(f"\nSource video: {video_file}")
+        print(f"Output directory: {clips_dir}")
+        print(f"Buffers: -{start_buffer:.1f}s / +{end_buffer:.1f}s")
+        
+        # Create clips
+        successful_clips = create_video_clips(
+            video_file, clips, clips_dir, 
+            start_buffer, end_buffer
+        )
+        
+        # Generate metadata
+        create_clip_metadata(clips, clips_dir)
+        
+        print(f"\n{'='*50}")
+        print(f"PROCESSING COMPLETE")
+        print(f"{'='*50}")
+        print(f"Successfully created: {successful_clips}/{len(clips)} clips")
+        print(f"Output location: {clips_dir}")
+        print(f"Metadata files: clip_metadata.json, clips_summary.txt")
+        
+        # Summary by severity
+        severity_counts = {}
+        for clip in clips:
+            severity_counts[clip['severity']] = severity_counts.get(clip['severity'], 0) + 1
+        
+        print(f"\nClips by severity:")
+        for severity, count in severity_counts.items():
+            print(f"  {severity}: {count} clips")
+        
+        return {
+            'success': successful_clips > 0,
+            'clips_created': successful_clips,
+            'total_clips_attempted': len(clips),
+            'output_directory': str(clips_dir),
+            'severity_breakdown': severity_counts,
+            'metadata_files': ['clip_metadata.json', 'clips_summary.txt']
+        }
+        
+    except Exception as e:
+        print(f"Error in extract_clips_from_analysis: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'clips_created': 0,
+            'output_directory': str(output_dir)
+        }
+
+# Add the function before main()
 def main():
     parser = argparse.ArgumentParser(
         description="Extract video clips from analysis files with problematic content segments",

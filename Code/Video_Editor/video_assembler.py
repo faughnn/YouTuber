@@ -26,11 +26,10 @@ class VideoAssembler:
             config_path: Path to configuration file (optional)
         """
         self.logger = logging.getLogger(__name__)
-        
-        # Set up paths
+          # Set up paths
         self.base_path = Path(__file__).parent.parent.parent
         self.audio_dir = self.base_path / "Content" / "Audio" / "Generated" / "TTS_Ready"
-        self.video_clips_dir = self.base_path / "Content" / "Video_Clips"
+        self.video_clips_dir = self.base_path / "Content" / "Video" / "Clips"
         self.timelines_dir = self.base_path / "Content" / "Timelines"
         self.output_dir = self.base_path / "Content" / "Video" / "Final_Episodes"
         

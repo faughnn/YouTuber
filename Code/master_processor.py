@@ -5,6 +5,36 @@ Master Processing Script for YouTube Content Processing
 This script orchestrates the complete workflow from YouTube URL or audio file
 to final transcript analysis, integrating all existing processing components.
 
+USAGE EXAMPLES:
+    # Basic YouTube video processing (Stages 1-5: Download → Transcript → Analysis)
+    python master_processor.py "https://www.youtube.com/watch?v=VIDEO_ID"
+    
+    # Process local audio file
+    python master_processor.py "path/to/audio/file.mp3"
+    
+    # Full 10-stage pipeline (includes video generation)
+    python master_processor.py --full-pipeline "https://www.youtube.com/watch?v=VIDEO_ID"
+    
+    # Generate podcast script and audio only
+    python master_processor.py --generate-podcast --generate-audio "YOUTUBE_URL"
+    
+    # Use custom analysis rules
+    python master_processor.py --analysis-rules "custom_rules.txt" "YOUTUBE_URL"
+    
+    # Batch processing from file
+    python master_processor.py --batch urls.txt
+    
+    # Skip existing files and use verbose logging
+    python master_processor.py --skip-existing --verbose "YOUTUBE_URL"
+    
+    # Dry run to see what would be processed
+    python master_processor.py --dry-run "YOUTUBE_URL"
+
+PIPELINE STAGES:
+    Stages 1-4 (Default):   Input → Download → Transcript → Analysis
+    Stages 5-6 (Podcast):   + Script Generation → Audio Generation  
+    Stages 7-9 (Video):     + Video Clips → Timeline → Final Assembly
+
 Created: June 3, 2025
 Author: Master Processor Development Plan
 """
@@ -19,6 +49,7 @@ import uuid
 import re
 import json
 import importlib.util
+import subprocess
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
@@ -35,6 +66,7 @@ from Utils.file_organizer import FileOrganizer
 try:
     from Extraction.youtube_audio_extractor import download_audio
     from Extraction.youtube_video_downloader import download_video as download_youtube_video
+    from Extraction.youtube_url_utils import YouTubeUrlUtils
     from Extraction.audio_diarizer import diarize_audio, sanitize_audio_filename, extract_channel_name
     # Import from Content_Analysis directory
     import importlib.util
@@ -53,9 +85,8 @@ try:
     podcast_generator_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(podcast_generator_module)
     PodcastNarrativeGenerator = podcast_generator_module.PodcastNarrativeGenerator
-    
-    # Import TTS processor
-    tts_processor_path = os.path.join(script_dir, "TTS", "podcast_tts_processor.py")
+      # Import TTS processor
+    tts_processor_path = os.path.join(script_dir, "TTS", "core", "podcast_tts_processor.py")
     spec = importlib.util.spec_from_file_location("podcast_tts_processor", tts_processor_path)
     tts_processor_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tts_processor_module)
@@ -95,7 +126,7 @@ try:
             SimpleTTSGenerator = None
 except ImportError as e:
     print(f"Error importing processing modules: {e}")
-    print("Make sure you're running this script from the Scripts directory.")
+    print("Make sure you're running this script from the Code directory.")
     sys.exit(1)
 
 
@@ -126,7 +157,6 @@ class MasterProcessor:
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         short_uuid = str(uuid.uuid4())[:8]
         return f"{timestamp}_{short_uuid}"
-    
     def _load_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
         """Load configuration from YAML file."""
         if config_path is None:
@@ -162,9 +192,10 @@ class MasterProcessor:
                 'auto_gpu': True,
                 'full_transcript_analysis': True
             },            'paths': {
-                'audio_output': os.path.normpath(os.path.join(base_dir, 'Audio Rips')),
-                'transcript_output': os.path.normpath(os.path.join(base_dir, 'Transcripts')),
-                'analysis_rules': os.path.join(base_dir, 'Scripts', 'Content Analysis', 'AnalysisRules.txt')
+                'audio_output': os.path.normpath(os.path.join(base_dir, 'Content', 'Audio', 'Rips')),
+                'video_output': os.path.normpath(os.path.join(base_dir, 'Content', 'Video', 'Rips')),
+                'transcript_output': os.path.normpath(os.path.join(base_dir, 'Content', 'Raw')),
+                'analysis_rules': os.path.join(base_dir, 'Code', 'Content_Analysis', 'Rules', 'Joe_Rogan_selective_analysis_rules.txt')
             },
             'error_handling': {
                 'max_retries': 3,
@@ -217,8 +248,7 @@ class MasterProcessor:
         try:
             # Try to configure Gemini API
             if not configure_gemini():
-                # If the imported configure_gemini fails, try using our config
-                import google.generativeai as genai
+                # If the imported configure_gemini fails, try using our config                import google.generativeai as genai
                 api_key = self.config['api'].get('gemini_api_key')
                 if api_key:
                     genai.configure(api_key=api_key)
@@ -233,18 +263,17 @@ class MasterProcessor:
     
     def _validate_youtube_url(self, url: str) -> bool:
         """Validate if the input is a valid YouTube URL."""
-        youtube_patterns = [
-            r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
-            r'https?://youtu\.be/[\w-]+',
-            r'https?://(?:www\.)?youtube\.com/embed/[\w-]+',
-            r'^[\w-]{11}$'  # Direct video ID
-        ]
-        
-        return any(re.match(pattern, url) for pattern in youtube_patterns)
+        try:
+            return YouTubeUrlUtils.validate_youtube_url(url)
+        except Exception:
+            return False
     
     def _is_playlist_url(self, url: str) -> bool:
         """Check if the URL is a playlist URL."""
-        return 'playlist' in url.lower() or 'list=' in url
+        try:
+            return YouTubeUrlUtils.is_playlist_url(url)
+        except Exception:
+            return False
     
     def _validate_input(self, input_str: str) -> Dict[str, Any]:
         """Validate and categorize the input."""
@@ -258,15 +287,24 @@ class MasterProcessor:
             'info': {}
         }
         
-        # Check if it's a YouTube URL
+        # Check if it's a YouTube URL using YouTubeUrlUtils
         if self._validate_youtube_url(input_str):
-            if self._is_playlist_url(input_str):
-                validation_result['warnings'].append("Playlist URLs are not yet supported. Please provide individual video URLs.")
-                return validation_result
+            # Use YouTubeUrlUtils for comprehensive validation
+            youtube_validation = YouTubeUrlUtils.validate_input(input_str)
             
-            validation_result['valid'] = True
-            validation_result['type'] = 'youtube_url'
-            validation_result['info']['url'] = input_str
+            if youtube_validation['valid']:
+                validation_result['valid'] = True
+                validation_result['type'] = 'youtube_url'
+                validation_result['info']['url'] = youtube_validation['sanitized_url']
+                validation_result['info']['video_id'] = youtube_validation['video_id']
+                validation_result['warnings'].extend(youtube_validation['warnings'])
+                
+                # Add timestamp info if available
+                if youtube_validation.get('has_timestamp'):
+                    validation_result['info']['timestamp'] = youtube_validation['timestamp']
+            else:
+                validation_result['warnings'].extend(youtube_validation['errors'])
+                return validation_result
         
         # Check if it's a local audio file
         elif os.path.exists(input_str):
@@ -275,24 +313,130 @@ class MasterProcessor:
             validation_result['type'] = 'local_audio'
             validation_result['info'] = audio_validation
             validation_result['warnings'].extend(audio_validation['warnings'])
-        
         else:
             validation_result['warnings'].append(f"Input is neither a valid YouTube URL nor an existing audio file: {input_str}")
         
         return validation_result
     
-    def _stage_1_input_validation(self, input_str: str) -> Dict[str, Any]:
+    def _extract_video_id(self, url: str) -> Optional[str]:
+        """Extract video ID from YouTube URL."""
+        try:
+            return YouTubeUrlUtils.extract_video_id(url)
+        except Exception:
+            return None
+    
+    def _sanitize_youtube_url(self, url: str) -> str:
+        """Sanitize YouTube URL by removing tracking parameters."""
+        try:
+            return YouTubeUrlUtils.sanitize_youtube_url(url)
+        except Exception:
+            return url
+    
+    def _is_safe_youtube_url(self, url: str) -> bool:
+        """Check if URL is safe (no malicious patterns)."""
+        try:
+            return YouTubeUrlUtils.is_safe_youtube_url(url)
+        except Exception:
+            return False
+    
+    def _is_valid_youtube_domain(self, url: str) -> bool:
+        """Validate YouTube domain."""
+        try:
+            return YouTubeUrlUtils.is_valid_youtube_domain(url)
+        except Exception:
+            return False
+    
+    def _is_valid_video_id(self, video_id: str) -> bool:
+        """Validate video ID format."""
+        try:
+            return YouTubeUrlUtils.is_valid_video_id(video_id)
+        except Exception:
+            return False
+    
+    def _extract_timestamp(self, url: str) -> Optional[str]:
+        """Extract timestamp parameter from YouTube URL."""
+        try:
+            return YouTubeUrlUtils.extract_timestamp(url)
+        except Exception:
+            return None
+    
+    def _extract_youtube_title(self, youtube_url: str) -> str:
+        """Extract the title from a YouTube URL using yt-dlp."""
+        try:
+            get_title_command = [
+                'yt-dlp',
+                '--get-title',
+                '--no-warnings',
+                youtube_url
+            ]
+            process = subprocess.run(get_title_command, capture_output=True, text=True, check=True, encoding='utf-8')
+            video_title = process.stdout.strip()
+            self.logger.info(f"Extracted YouTube title: {video_title}")
+            return video_title
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Failed to extract YouTube title: {e}")
+            raise ValueError(f"Could not extract title from YouTube URL: {youtube_url}")
+        except Exception as e:
+            self.logger.error(f"Unexpected error extracting YouTube title: {e}")
+            raise ValueError(f"Unexpected error getting YouTube title: {str(e)}")
+    
+    def _create_episode_structure_early(self, youtube_url: str) -> Dict[str, str]:
+        """Create the complete episode folder structure early using YouTube title."""
+        try:
+            # Extract title from YouTube
+            video_title = self._extract_youtube_title(youtube_url)
+            
+            # Use the title to create episode structure
+            dummy_audio_name = f"{video_title}.mp3"
+            episode_paths = self.file_organizer.get_episode_paths(dummy_audio_name)
+            
+            self.logger.info(f"Created episode structure for: {video_title}")
+            self.logger.info(f"Episode folder: {episode_paths['episode_folder']}")
+              # Return the paths and title for later use
+            return {
+                'episode_title': video_title,
+                'episode_paths': episode_paths
+            }
+        except Exception as e:
+            self.logger.error(f"Failed to create early episode structure: {e}")
+            raise
+    
+    def _stage_1_input_validation(self, youtube_url: str = None, audio_file: str = None) -> Dict[str, Any]:
         """Stage 1: Input Validation and Preparation."""
         self.progress_tracker.start_stage(ProcessingStage.INPUT_VALIDATION, estimated_duration=1)
+        
+        # Determine input string for processing
+        input_str = youtube_url if youtube_url else audio_file if audio_file else None
+        if not input_str:
+            raise ValueError("Either youtube_url or audio_file must be provided")
+            
         self.logger.info(f"Starting input validation for: {input_str}")
         
-        try:
-            # Validate the input
+        try:            # Validate the input
             self.progress_tracker.update_stage_progress(30, "Validating input format")
             validation_result = self._validate_input(input_str)
             
             if not validation_result['valid']:
-                raise ValueError(f"Invalid input: {'; '.join(validation_result['warnings'])}")
+                # Don't raise exception for invalid inputs, return the validation result
+                self.progress_tracker.update_stage_progress(100, "Input validation complete (invalid input)")
+                self.progress_tracker.complete_stage(ProcessingStage.INPUT_VALIDATION)
+                self.logger.warning(f"Input validation failed: {'; '.join(validation_result['warnings'])}")
+                return validation_result
+            
+            # Add video_id to top level for YouTube URLs (for test compatibility)
+            if validation_result['type'] == 'youtube_url' and 'video_id' in validation_result.get('info', {}):
+                validation_result['video_id'] = validation_result['info']['video_id']
+            
+            # NEW: Create episode folder structure immediately for YouTube URLs
+            if validation_result['type'] == 'youtube_url':
+                self.progress_tracker.update_stage_progress(50, "Creating episode folder structure")
+                try:
+                    episode_structure = self._create_episode_structure_early(input_str)
+                    validation_result['episode_structure'] = episode_structure
+                    self.logger.info("Episode folder structure created before downloading")
+                except Exception as e:
+                    self.logger.warning(f"Could not create early episode structure: {e}")
+                    # Don't fail validation, just log the warning
             
             # Check for existing outputs if skip-existing is enabled
             self.progress_tracker.update_stage_progress(70, "Checking existing outputs")
@@ -365,8 +509,12 @@ class MasterProcessor:
                             
                     except Exception as e:
                         self.logger.warning(f"Video download failed: {e}, continuing with audio-only processing")
-                        
-                self.progress_tracker.update_stage_progress(80, "Downloads complete")
+                    
+                    self.progress_tracker.update_stage_progress(80, "Downloads complete")
+                
+                # Files are now downloaded directly to their episode structure, no organization needed
+                self.progress_tracker.update_stage_progress(85, "Files ready in episode structure")
+                self.logger.info("Audio and video files downloaded directly to episode Input folder")
                 
             elif input_info['type'] == 'local_audio':
                 # For local files, just validate and use the path
@@ -534,14 +682,11 @@ class MasterProcessor:
             # CRITICAL: Perform analysis WITHOUT chunking - send full transcript
             self.progress_tracker.update_stage_progress(30, "Analyzing full transcript (no chunking)")
             self.logger.info(f"Sending full transcript to Gemini (length: {len(transcript_text)} characters)")
-            
-            # Use retry mechanism for API call
+              # Use retry mechanism for API call
             analysis_result = self.error_handler.retry_with_backoff(
                 analyze_with_gemini,
                 transcript_text,  # Full transcript
                 analysis_rules,
-                chunk_number=None,  # No chunking
-                total_chunks=None,  # No chunking
                 stage="content_analysis",
                 context="Gemini API call"
             )
@@ -574,7 +719,6 @@ ANALYSIS RESULTS:
             if not os.path.exists(analysis_dir):
                 self.logger.info(f"Creating directory for analysis: {analysis_dir}")
                 os.makedirs(analysis_dir, exist_ok=True)
-            
             try:
                 with open(analysis_path, 'w', encoding='utf-8') as f:
                     f.write(full_output)
@@ -590,79 +734,6 @@ ANALYSIS RESULTS:
             
         except Exception as e:
             self.progress_tracker.fail_stage(ProcessingStage.CONTENT_ANALYSIS, str(e))
-            raise
-    
-    def _stage_5_file_organization(self, results: Dict[str, str]) -> Dict[str, str]:
-        """Stage 5: File Organization and Cleanup."""
-        self.progress_tracker.start_stage(ProcessingStage.FILE_ORGANIZATION, estimated_duration=5)
-        self.logger.info("Starting file organization and cleanup")
-        
-        try:
-            # Validate all output files exist
-            self.progress_tracker.update_stage_progress(20, "Validating outputs")
-            
-            required_files = ['transcript_path', 'analysis_path']
-            for file_key in required_files:
-                if file_key not in results:
-                    raise ValueError(f"Missing required output: {file_key}")
-                
-                file_path = results[file_key]
-                if not os.path.exists(file_path):
-                    raise FileNotFoundError(f"Expected output file not found: {file_path}")
-            
-            # Create processing metadata
-            self.progress_tracker.update_stage_progress(50, "Creating metadata")
-            
-            # Get episode folder for metadata
-            episode_folder = os.path.dirname(results['transcript_path'])
-            
-            processing_metadata = {
-                'session_id': self.session_id,
-                'timestamp': time.time(),
-                'input': self.current_input,
-                'outputs': results,
-                'config_used': {
-                    'whisper_model': self.config['processing']['whisper_model'],
-                    'full_transcript_analysis': self.config['processing']['full_transcript_analysis']
-                }            }
-            
-            metadata_path = os.path.join(episode_folder, f"processing_metadata_{self.session_id}.json")
-            
-            # Ensure the episode folder exists before saving metadata
-            if not os.path.exists(episode_folder):
-                self.logger.info(f"Creating episode folder for metadata: {episode_folder}")
-                os.makedirs(episode_folder, exist_ok=True)
-            
-            try:
-                import json
-                with open(metadata_path, 'w', encoding='utf-8') as f:
-                    json.dump(processing_metadata, f, indent=2)
-                results['metadata_path'] = metadata_path
-            except Exception as e:
-                self.logger.warning(f"Failed to create metadata file: {e}")
-            
-            # Cleanup temporary files
-            self.progress_tracker.update_stage_progress(80, "Cleaning up temporary files")
-            self.file_organizer.cleanup_temp_files()
-            
-            # Final validation
-            self.progress_tracker.update_stage_progress(95, "Final validation")
-            
-            # Generate summary
-            transcript_size = os.path.getsize(results['transcript_path']) / 1024  # KB
-            analysis_size = os.path.getsize(results['analysis_path']) / 1024    # KB
-            
-            self.logger.info(f"Processing complete:")
-            self.logger.info(f"  Transcript: {results['transcript_path']} ({transcript_size:.1f} KB)")
-            self.logger.info(f"  Analysis: {results['analysis_path']} ({analysis_size:.1f} KB)")
-            
-            self.progress_tracker.update_stage_progress(100, "File organization complete")
-            self.progress_tracker.complete_stage(ProcessingStage.FILE_ORGANIZATION)
-            
-            return results
-            
-        except Exception as e:
-            self.progress_tracker.fail_stage(ProcessingStage.FILE_ORGANIZATION, str(e))
             raise
     
     def _detect_episode_type_and_rules(self, audio_filename: str, custom_rules_file: Optional[str] = None) -> str:
@@ -685,13 +756,13 @@ ANALYSIS RESULTS:
                 self.logger.warning(f"Custom rules file not found: {custom_rules_file}, falling back to auto-detection")
         
         # Extract base filename without extension
-        base_name = os.path.splitext(os.path.basename(audio_filename))[0]
-        # Check for Joe Rogan episodes
+        base_name = os.path.splitext(os.path.basename(audio_filename))[0]        # Check for Joe Rogan episodes
         if "Joe Rogan Experience" in base_name:
             joe_rogan_rules = os.path.join(
                 os.path.dirname(os.path.abspath(__file__)), 
                 'Content_Analysis', 
-                'JoeRoganAnalysisRules.txt'
+                'Rules',
+                'Joe_Rogan_selective_analysis_rules.txt'
             )
             if os.path.exists(joe_rogan_rules):
                 self.logger.info(f"Detected Joe Rogan episode, using specialized rules: {joe_rogan_rules}")
@@ -720,15 +791,27 @@ ANALYSIS RESULTS:
                 analysis_path, 
                 episode_title, 
                 template_name
+            )            # Save script files
+            self.progress_tracker.update_stage_progress(70, "Saving podcast script files")
+            
+            # Get the transcript path from analysis path to derive proper folder structure
+            # analysis_path is in Processing folder, we need to get the corresponding transcript in Input folder
+            analysis_dir = os.path.dirname(analysis_path)  # Processing folder
+            episode_dir = os.path.dirname(analysis_dir)   # Episode folder
+            input_dir = os.path.join(episode_dir, 'Input')
+            
+            # Extract base name and create transcript path
+            analysis_basename = os.path.basename(analysis_path)
+            base_name = analysis_basename.replace('_analysis.txt', '').replace('_analysis_analysis.txt', '')
+            transcript_path = os.path.join(input_dir, f"{base_name}.json")
+            
+            # Use new folder structure - get Output/Scripts path
+            script_output_path = self.file_organizer.get_podcast_script_output_path(
+                transcript_path, 
+                f"{base_name}_podcast_script"
             )
             
-            # Save script files
-            self.progress_tracker.update_stage_progress(70, "Saving podcast script files")
-            episode_folder = os.path.dirname(analysis_path)
-            base_name = os.path.splitext(os.path.basename(analysis_path))[0].replace('_analysis_analysis', '')
-            script_base_path = os.path.join(episode_folder, f"{base_name}_podcast_script")
-            
-            json_path, txt_path = generator.save_podcast_script(script_data, script_base_path)
+            json_path, txt_path = generator.save_podcast_script(script_data, script_output_path)
             
             # Log results
             self.progress_tracker.update_stage_progress(90, "Generating podcast summary")
@@ -763,22 +846,24 @@ ANALYSIS RESULTS:
                 
                 # Load podcast script
                 self.progress_tracker.update_stage_progress(20, "Loading podcast script")
-                
-                # Generate audio using the structured TTS processor
+                  # Generate audio using the structured TTS processor
                 self.progress_tracker.update_stage_progress(30, "Generating structured audio with TTS")
                 
                 audio_results = tts_processor.generate_podcast_audio(
                     tts_script_path=podcast_script_path
                 )
                 
-                if audio_results and audio_results.get('success', False):
+                if audio_results and audio_results.get('successful_segments', 0) > 0:
                     output_dir = audio_results.get('output_directory')
                     generated_files = audio_results.get('generated_files', [])
+                    successful_segments = audio_results.get('successful_segments', 0)
+                    total_segments = audio_results.get('total_segments', 0)
                     
                     self.progress_tracker.update_stage_progress(90, "TTS generation complete")
                     self.logger.info(f"TTS audio generated successfully:")
                     self.logger.info(f"  Output Directory: {output_dir}")
                     self.logger.info(f"  Generated Files: {len(generated_files)}")
+                    self.logger.info(f"  Success Rate: {successful_segments}/{total_segments}")
                     
                     self.progress_tracker.update_stage_progress(100, "Audio generation complete")
                     self.progress_tracker.complete_stage(ProcessingStage.AUDIO_GENERATION)
@@ -932,7 +1017,6 @@ ANALYSIS RESULTS:
                 self.progress_tracker.update_stage_progress(90, "Timeline building complete")
                 self.logger.info(f"Video timeline built successfully:")
                 self.logger.info(f"  Timeline File: {timeline_path}")
-                
                 self.progress_tracker.update_stage_progress(100, "Video timeline building complete")
                 self.progress_tracker.complete_stage(ProcessingStage.VIDEO_TIMELINE_BUILDING)
                 
@@ -945,8 +1029,8 @@ ANALYSIS RESULTS:
             self.logger.error(f"Video timeline building failed: {e}")
             return None
 
-    def _stage_10_final_video_assembly(self, timeline_path: str, episode_title: str) -> Optional[str]:
-        """Stage 10: Assemble Final Video from Timeline."""
+    def _stage_9_final_video_assembly(self, timeline_path: str, episode_title: str) -> Optional[str]:
+        """Stage 9: Assemble Final Video from Timeline."""
         self.progress_tracker.start_stage(ProcessingStage.FINAL_VIDEO_ASSEMBLY, estimated_duration=300)
         self.logger.info("Starting final video assembly")
         
@@ -984,7 +1068,6 @@ ANALYSIS RESULTS:
                 return final_video_path
             else:
                 raise Exception("Video assembly failed")
-                
         except Exception as e:
             self.progress_tracker.fail_stage(ProcessingStage.FINAL_VIDEO_ASSEMBLY, str(e))
             self.logger.error(f"Final video assembly failed: {e}")            
@@ -1001,7 +1084,11 @@ ANALYSIS RESULTS:
         
         try:
             # Stage 1: Input Validation
-            input_info = self._stage_1_input_validation(input_str)
+            # Determine if input is YouTube URL or audio file
+            if self._validate_youtube_url(input_str):
+                input_info = self._stage_1_input_validation(youtube_url=input_str, audio_file=None)
+            else:
+                input_info = self._stage_1_input_validation(youtube_url=None, audio_file=input_str)
             
             # Check skip_existing
             if skip_existing and input_info.get('existing_outputs', {}).get('analysis_exists', False):
@@ -1020,13 +1107,12 @@ ANALYSIS RESULTS:
             
             # Stage 3: Transcript Generation
             transcript_path = self._stage_3_transcript_generation(acquisition_results)
-            
-            # Stage 4: Content Analysis (NO CHUNKING)
+              # Stage 4: Content Analysis (NO CHUNKING)
             # Pass audio_path for better episode type detection
             analysis_path = self._stage_4_content_analysis(transcript_path, analysis_rules_file, audio_path)
             
-            # Stage 5: File Organization
-            results = {
+            # Build results dictionary
+            final_results = {
                 'audio_path': audio_path,
                 'transcript_path': transcript_path,
                 'analysis_path': analysis_path
@@ -1034,9 +1120,7 @@ ANALYSIS RESULTS:
             
             # Add video path if available
             if video_path:
-                results['video_path'] = video_path
-            
-            final_results = self._stage_5_file_organization(results)
+                final_results['video_path'] = video_path
             
             # Determine pipeline extent based on flags
             if full_pipeline:
@@ -1086,9 +1170,8 @@ ANALYSIS RESULTS:
                                     )
                                     if timeline_path:
                                         final_results['timeline_path'] = timeline_path
-                                        
-                                        # Stage 10: Final Video Assembly
-                                        final_video_path = self._stage_10_final_video_assembly(
+                                          # Stage 9: Final Video Assembly
+                                        final_video_path = self._stage_9_final_video_assembly(
                                             timeline_path,
                                             episode_title
                                         )
@@ -1096,6 +1179,14 @@ ANALYSIS RESULTS:
                                             final_results['final_video_path'] = final_video_path
                             elif generate_video and not video_path:
                                 self.logger.warning("Video generation requested but no video file available")
+              # Create processing metadata summary after all stages complete
+            try:
+                summary_path = self.file_organizer.create_processing_summary(final_results, self.session_id)
+                if summary_path:
+                    final_results['processing_summary'] = summary_path
+                    self.logger.info(f"Processing summary created: {summary_path}")
+            except Exception as e:
+                self.logger.warning(f"Failed to create processing summary: {e}")
             
             self.logger.info(f"Processing completed successfully for: {input_str}")
             return final_results
@@ -1103,6 +1194,13 @@ ANALYSIS RESULTS:
         except Exception as e:
             self.logger.error(f"Processing failed for {input_str}: {e}")
             raise
+        finally:
+            # Clean up any temporary files created during processing
+            try:
+                self.file_organizer.cleanup_temp_files()
+                self.logger.debug("Temporary file cleanup completed")
+            except Exception as e:
+                self.logger.warning(f"Temporary file cleanup failed: {e}")
     
     def process_batch(self, input_file: str, analysis_rules_file: Optional[str] = None,
                      skip_existing: bool = False) -> List[Dict[str, Any]]:

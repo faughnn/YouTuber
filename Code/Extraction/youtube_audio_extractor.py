@@ -14,37 +14,75 @@ import sys
 import subprocess
 import os
 
-# Define the target directory for audio rips
-AUDIO_RIPS_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Audio Rips")
+# Import FileOrganizer for consistent path management
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from Utils.file_organizer import FileOrganizer
+from .youtube_url_utils import YouTubeUrlUtils
+import yaml
+
+def get_episode_input_folder(episode_title):
+    """Get the Input folder for a specific episode, creating the structure if needed."""
+    # Import FileOrganizer using absolute path
+    from Utils.file_organizer import FileOrganizer
+    
+    # Load config to get base paths
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Config", "default_config.yaml")
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    # Expand relative paths to absolute paths (same logic as master_processor)
+    script_dir = os.path.dirname(os.path.abspath(__file__))  # This script's directory (Extraction)
+    code_dir = os.path.dirname(script_dir)  # Go up one level to Code directory
+    base_dir = os.path.dirname(code_dir)  # Go up one level from Code to YouTuber directory
+    
+    # Resolve relative paths to absolute paths
+    for key, path in config['paths'].items():
+        if not os.path.isabs(path):
+            config['paths'][key] = os.path.normpath(os.path.join(base_dir, path))
+    
+    # Create file organizer and get episode structure
+    file_organizer = FileOrganizer(config['paths'])
+    dummy_audio_name = f"{episode_title}.mp3"
+    episode_paths = file_organizer.get_episode_paths(dummy_audio_name)
+    
+    return episode_paths['input_folder']
 
 def download_audio(video_url_or_id):
-    """Downloads the audio from a YouTube video using yt-dlp and saves it as MP3 in the Audio Rips folder."""
+    """Downloads the audio from a YouTube video using yt-dlp and saves it as MP3 directly to the episode Input folder."""
     try:
-        # Ensure the Audio Rips folder exists
-        if not os.path.exists(AUDIO_RIPS_FOLDER):
-            os.makedirs(AUDIO_RIPS_FOLDER)
-            print(f"Created directory: {AUDIO_RIPS_FOLDER}")
-
-        # Construct the full URL if only an ID is provided
-        if not video_url_or_id.startswith(('http:', 'https:')) and len(video_url_or_id) == 11 and not '/' in video_url_or_id:
-            video_url_or_id = f"https://www.youtube.com/watch?v={video_url_or_id}"
+        # Validate and normalize input using YouTubeUrlUtils
+        validation_result = YouTubeUrlUtils.validate_input(video_url_or_id)
+        if not validation_result['valid']:
+            raise ValueError(f"Invalid YouTube URL or video ID: {'; '.join(validation_result['errors'])}")
+        
+        # Use the standardized URL
+        normalized_url = validation_result['sanitized_url']
+        video_id = validation_result['video_id']
+        
+        print(f"Validated input: {video_id}")
+        if validation_result['warnings']:
+            for warning in validation_result['warnings']:
+                print(f"Warning: {warning}")
 
         # Get video title for the filename using yt-dlp
         get_title_command = [
             'yt-dlp',
             '--get-title',
             '--no-warnings',
-            video_url_or_id
+            normalized_url
         ]
         process = subprocess.run(get_title_command, capture_output=True, text=True, check=True, encoding='utf-8')
         video_title = process.stdout.strip()
         
+        # Get episode Input folder using the video title
+        episode_input_folder = get_episode_input_folder(video_title)
+        
         # Sanitize the title to create a valid filename
         safe_filename = "".join([c for c in video_title if c.isalnum() or c in (' ', '-', '_')]).rstrip()
-        # Output template will be just the filename, path will be prepended later
-        output_filename = f"{safe_filename}.mp3"
+        # Use standardized filename
+        output_filename = f"original_audio.mp3"
         # Construct the full output path
-        output_path_template = os.path.join(AUDIO_RIPS_FOLDER, output_filename)
+        output_path_template = os.path.join(episode_input_folder, output_filename)
 
         print(f"Downloading audio for: {video_title}")
         print(f"Output will be saved to: {output_path_template}")
@@ -62,7 +100,7 @@ def download_audio(video_url_or_id):
             '-o', output_path_template, # Use the full path for output
             '--no-warnings',
             '--quiet',
-            video_url_or_id
+            normalized_url
         ]
         
         subprocess.run(command, check=True)

@@ -1,0 +1,59 @@
+{
+  "youtube_urls": {
+    "valid": [
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "https://youtu.be/dQw4w9WgXcQ",
+      "https://youtube.com/embed/dQw4w9WgXcQ",      "https://youtube.com/v/dQw4w9WgXcQ",
+      "https://youtube.com/shorts/dQw4w9WgXcQ",
+      "https://m.youtube.com/watch?v=dQw4w9WgXcQ",
+      "dQw4w9WgXcQ"
+    ],
+    "valid_with_params": [
+      "https://youtube.com/watch?v=dQw4w9WgXcQ&t=30s",
+      "https://youtube.com/watch?v=dQw4w9WgXcQ&feature=share",
+      "https://youtube.com/watch?v=dQw4w9WgXcQ&utm_source=test&fbclid=123"
+    ],
+    "playlist_urls": [
+      "https://youtube.com/watch?v=dQw4w9WgXcQ&list=PLrZ9z-FXWr8dQw4w9WgXcQ&index=1",
+      "https://youtube.com/playlist?list=PLrZ9z-FXWr8dQw4w9WgXcQ"
+    ],
+  "invalid": [
+      "https://vimeo.com/123456789",
+      "not_a_url",
+      "https://youtube.com/watch?v=",
+      "aBcDeFgHiJ",
+      "aBcDeFgHiJkL1",
+      "https://example.com/malicious",      "",
+      null
+    ],
+    "additional_valid_ids": [
+      "aBcDeFgHiJk"
+    ]
+  },
+  "audio_files": {
+    "valid_extensions": [".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg"],
+    "invalid_extensions": [".txt", ".pdf", ".jpg", ".exe"],
+    "test_filenames": {
+      "normal": "sample",
+      "with_spaces": "file with spaces",
+      "unicode": "test_üñíçødé",
+      "special_chars": "test-file_2025"
+    }
+  },
+  "expected_video_ids": {
+    "dQw4w9WgXcQ": {
+      "title": "Rick Astley - Never Gonna Give You Up (Official Music Video)",
+      "duration": 212,
+      "valid": true
+    }
+  },
+  "error_messages": {
+    "invalid_url": "Invalid YouTube URL. Please provide a valid YouTube video URL (e.g., https://youtube.com/watch?v=VIDEO_ID)",
+    "file_not_found": "Audio file not found. Expected: {path}\nPlease check the file path and permissions.",
+    "invalid_format": "Unsupported audio format: {ext}. Supported formats: .mp3, .wav, .flac, .m4a, .aac, .ogg",
+    "corrupted_file": "Audio file appears to be corrupted or unreadable: {path}",
+    "empty_input": "No input provided. Please provide either a YouTube URL or path to an audio file.",
+    "private_video": "This YouTube video is private or not available in your region.",
+    "network_error": "Unable to connect to YouTube. Please check your internet connection and try again."
+  }
+}

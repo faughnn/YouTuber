@@ -7,80 +7,77 @@ To use this script:
    You can download ffmpeg from https://ffmpeg.org/download.html.
 3. Run the script from your terminal: python youtube_video_downloader.py <video_url_or_id>
    Replace <video_url_or_id> with the URL or ID of the YouTube video.
-   The video will be saved as an MP4 file in the 'Video Rips' folder,
-   with the video title as the filename.
+   The video will be saved as an MP4 file in the episode's Input folder,
+   with a standardized filename.
 '''
 import sys
 import subprocess
 import os
 
-# Define the target directory for video rips
-VIDEO_RIPS_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Video Rips")
+# Import FileOrganizer for consistent path management
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from Utils.file_organizer import FileOrganizer
+from .youtube_url_utils import YouTubeUrlUtils
 
 def download_video(video_url_or_id):
-    """Downloads the video from a YouTube video using yt-dlp and saves it as MP4 in the Video Rips folder."""
+    """Downloads the video from a YouTube video using yt-dlp and saves it as MP4 directly to the episode Input folder."""
     try:
-        # Ensure the Video Rips folder exists
-        if not os.path.exists(VIDEO_RIPS_FOLDER):
-            os.makedirs(VIDEO_RIPS_FOLDER)
-            print(f"Created directory: {VIDEO_RIPS_FOLDER}")
+        # Validate and normalize input using YouTubeUrlUtils
+        validation_result = YouTubeUrlUtils.validate_input(video_url_or_id)
+        if not validation_result['valid']:
+            raise ValueError(f"Invalid YouTube URL or video ID: {'; '.join(validation_result['errors'])}")
+        
+        # Use the standardized URL
+        normalized_url = validation_result['sanitized_url']
+        video_id = validation_result['video_id']
+        
+        print(f"Validated input: {video_id}")
+        if validation_result['warnings']:
+            for warning in validation_result['warnings']:
+                print(f"Warning: {warning}")
 
-        # Construct the full URL if only an ID is provided
-        if not video_url_or_id.startswith(('http:', 'https:')) and len(video_url_or_id) == 11 and not '/' in video_url_or_id:
-            video_url_or_id = f"https://www.youtube.com/watch?v={video_url_or_id}"
-
-        # Get video title for the filename using yt-dlp
+        # Get video title first to determine episode structure
         get_title_command = [
             'yt-dlp',
             '--get-title',
             '--no-warnings',
-            video_url_or_id
+            normalized_url
         ]
         process = subprocess.run(get_title_command, capture_output=True, text=True, check=True, encoding='utf-8')
         video_title = process.stdout.strip()
-          # Sanitize the title to create a valid filename and folder name
-        safe_filename = "".join([c for c in video_title if c.isalnum() or c in (' ', '-', '_')]).rstrip()
         
-        # Create episode-specific folder
-        episode_folder = os.path.join(VIDEO_RIPS_FOLDER, safe_filename)
-        if not os.path.exists(episode_folder):
-            os.makedirs(episode_folder)
-            print(f"Created episode directory: {episode_folder}")
+        # Get the episode Input folder using FileOrganizer
+        file_organizer = FileOrganizer()
+        episode_input_folder = file_organizer.get_episode_input_folder(video_title)
         
-        # Create Clips subfolder within the episode folder
-        clips_folder = os.path.join(episode_folder, "Clips")
-        if not os.path.exists(clips_folder):
-            os.makedirs(clips_folder)
-            print(f"Created clips directory: {clips_folder}")
+        # Create the Input folder if it doesn't exist
+        os.makedirs(episode_input_folder, exist_ok=True)
         
-        output_filename = f"{safe_filename}.mp4" # Save as .mp4
-        # Construct the full output path within the episode folder
-        output_path_template = os.path.join(episode_folder, output_filename)
+        # Use standardized filename
+        output_filename = "original_video.mp4"
+        output_path = os.path.join(episode_input_folder, output_filename)
 
         print(f"Downloading video for: {video_title}")
-        print(f"Output will be saved to: {output_path_template}")
-        
-        # Command to download video, preferring MP4 format.
+        print(f"Output will be saved to: {output_path}")
+          # Command to download video, preferring MP4 format.
         # -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best': 
         #   Selects best MP4 video and M4A audio, or best MP4 overall, or best available.
         #   yt-dlp will attempt to mux these into an MP4 container specified by -o.
         command = [
             'yt-dlp',
             '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-            '-o', output_path_template, # Output template with .mp4 extension
+            '-o', output_path, # Output template with .mp4 extension
             '--no-warnings',
-            video_url_or_id
+            normalized_url
         ]
         
         subprocess.run(command, check=True)
-        
-        downloaded_file_path = output_path_template
 
-        if os.path.exists(downloaded_file_path):
-            print(f"Video downloaded successfully: {downloaded_file_path}")
-            return downloaded_file_path
+        if os.path.exists(output_path):
+            print(f"Video downloaded successfully: {output_path}")
+            return output_path
         else:
-            return f"Video download failed, file not found at: {downloaded_file_path}"
+            return f"Video download failed, file not found at: {output_path}"
 
     except subprocess.CalledProcessError as e:
         error_output = e.stderr if e.stderr else e.stdout

@@ -4,23 +4,8 @@
 # This gitignore reflects the new Code/ and Content/ separation implemented
 # in the directory refactoring. Legacy directory references have been updated.
 
-# Exclude large media and data files
-Content/Audio/Rips/
-Content/Video/Rips/
-Content/Audio/Generated/
-Content/Video/Clips/
-
-# Exclude raw transcript and analysis data (keep structure, exclude large files)
-Content/Raw/*/
-Content/Analysis/*/
-Content/Scripts/*/
-
-# Include important structure files but exclude large content
-!Content/Raw/.gitkeep
-!Content/Analysis/.gitkeep
-!Content/Scripts/.gitkeep
-!Content/Audio/Rips/.gitkeep
-!Content/Video/Rips/.gitkeep
+# Exclude entire Content folder
+Content/
 
 # Exclude configuration files with sensitive data
 Code/Config/default_config.yaml

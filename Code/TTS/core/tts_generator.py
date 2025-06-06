@@ -20,13 +20,9 @@ class SimpleTTSGenerator:
         self.config = self._load_tts_config()
         
         self.api_key = self._get_api_key()
-        self.client = genai.Client(api_key=self.api_key)
-        
-        # Set output directory - default to Content/Audio/Generated
+        self.client = genai.Client(api_key=self.api_key)        # Set output directory - must be provided for episode structure
         if output_dir is None:
-            # Navigate from TTS/core/ to Content/Audio/Generated
-            base_path = Path(__file__).parent.parent.parent.parent
-            self.output_dir = base_path / "Content" / "Audio" / "Generated"
+            raise ValueError("Output directory must be specified for episode-based structure. Use get_audio_output_path() from FileOrganizer.")
         else:
             self.output_dir = Path(output_dir)
             

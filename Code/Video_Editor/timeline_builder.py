@@ -34,12 +34,11 @@ class TimelineBuilder:
             config_path: Path to TTS config file
         """
         self.logger = logging.getLogger(__name__)
-        
-        # Set up paths
+          # Set up paths
         self.base_path = Path(__file__).parent.parent.parent
         self.audio_output_dir = self.base_path / "Content" / "Audio" / "Generated" / "TTS_Ready"
         self.timeline_output_dir = self.base_path / "Content" / "Timelines"
-        self.video_clips_dir = self.base_path / "Content" / "Video_Clips"
+        self.video_clips_dir = self.base_path / "Content" / "Video" / "Clips"
         
         # Create directories
         self.audio_output_dir.mkdir(parents=True, exist_ok=True)
