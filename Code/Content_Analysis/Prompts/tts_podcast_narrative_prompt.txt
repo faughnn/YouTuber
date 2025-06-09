@@ -1,29 +1,32 @@
 You are creating a structured podcast script for TTS audio generation to critically analyze Joe Rogan clips from "{episode_title}".
 
-YOUR VOICE: Humorous, slightly sarcastic, slightly snarky. Think Jon Stewart meets fact-checker. Be factual but entertaining. Call out BS with wit, not anger.
-
-FULL ANALYSIS DATA:
-{analysis_json}
+YOUR VOICE: Humorous, slightly sarcastic, slightly snarky. Think Jon Stewart meets fact-checker. Be factual but entertaining. Call out BS with wit, not anger but sometimes snarky.
 
 TTS PRODUCTION REQUIREMENTS:
 - Script will be broken into separate audio segments for video editing
 - Each segment needs clear, self-contained narrative
 - Avoid references to "above" or "below" segments
 - Write for audio-only consumption first
+- This JSON output will also serve as the video timeline structure
 
 YOUR TASKS:
 
 1. CLIP SELECTION: Choose 4-7 clips maximum based on:
-   - Factual inaccuracy severity
-   - Real-world harm potential  
-   - Viral spread likelihood
-   - Representative misinformation patterns
+   - Factual inaccuracy level (how wrong is the claim?)
+   - Potential real-world harm (could this hurt people?)
+   - Audience reach/virality potential (will this spread?)
+   - Representative of broader misinformation patterns (part of bigger issue?)
 
 2. NARRATIVE STRUCTURE: Create distinct segments:
-   - INTRO: Hook + context + episode preview (3-4 min target)
+   - INTRO: Hook + context + episode preview (30s-1 min target)
    - PRE-CLIP: Setup each clip with context (1 min target)
    - POST-CLIP: Fact-check + analysis (2-3 min target) 
-   - CONCLUSION: Synthesis + media literacy lesson (5-7 min target)
+   - CONCLUSION: Synthesis + media literacy lesson (1 min target)
+
+3. CLIP ORDERING: Arrange selected clips for maximum narrative impact
+   - Logical flow between topics
+   - Building to climactic moments
+   - Effective opening hook and closing
 
 3. VOICE STYLE GUIDANCE:
    - Intro: Enthusiastic, welcoming tone
@@ -42,32 +45,63 @@ SPECIAL INSTRUCTIONS:
 - Focus on specific, fact-checkable claims
 - Provide constructive media literacy education
 - Balance entertainment with credibility
-
-{custom_instructions}
+- Structure output to serve as both script and video timeline
 
 OUTPUT FORMAT:
 Return a JSON object with this exact structure:
 {{
   "narrative_theme": "chosen theme name",
-  "selected_clips": [
+  "podcast_sections": [
     {{
+      "section_type": "intro",
+      "section_id": "intro_001",
+      "script_content": "complete intro script text",
+      "estimated_duration": "30s-1min",
+      "audio_tone": "enthusiastic, welcoming"
+    }},
+    {{
+      "section_type": "pre_clip",
+      "section_id": "pre_clip_001", 
+      "clip_reference": "segment_identifier_from_analysis",
+      "script_content": "setup script for this clip",
+      "estimated_duration": "1min",
+      "audio_tone": "conversational, setting up intrigue"
+    }},
+    {{
+      "section_type": "video_clip",
+      "section_id": "video_clip_001",
       "clip_id": "segment_identifier_from_analysis",
       "start_time": "timestamp",
-      "end_time": "timestamp", 
+      "end_time": "timestamp",
       "title": "descriptive_clip_title",
       "selection_reason": "why this clip was chosen",
       "severity_level": "HIGH/CRITICAL from analysis",
-      "key_claims": ["main factual claims to address"]
+      "key_claims": ["main factual claims to address"],
+      "estimated_duration": "clip length"
+    }},
+    {{
+      "section_type": "post_clip",
+      "section_id": "post_clip_001",
+      "clip_reference": "segment_identifier_from_analysis", 
+      "script_content": "fact-check and analysis script",
+      "estimated_duration": "2-3min",
+      "audio_tone": "sharp, fact-checking mode (can be sarcastic)"
+    }},
+    {{
+      "section_type": "outro",
+      "section_id": "outro_001",
+      "script_content": "synthesis and media literacy lesson",
+      "estimated_duration": "1min", 
+      "audio_tone": "thoughtful, educational wrap-up"
     }}
-  ],
-  "clip_order": ["ordered list of clip_ids for podcast flow"],
-  "full_script": "complete podcast script with clear segment breaks and CLIP_MARKER tags",
-  "script_metadata": {{
-    "estimated_duration": "total minutes",
-    "target_audience": "description", 
+  ],  "script_metadata": {{
+    "total_estimated_duration": "total minutes",
+    "target_audience": "description",
     "key_themes": ["main themes covered"],
-    "tts_segments_count": "number of separate audio files needed"
+    "total_clips_analyzed": "number",
+    "tts_segments_count": "number of separate audio files needed",
+    "timeline_ready": true
   }}
 }}
 
-Remember: Each script segment will become a separate audio file, so write for clear, standalone audio consumption while maintaining overall narrative flow.
+Remember: Each script segment will become a separate audio file, so write for clear, standalone audio consumption while maintaining overall narrative flow. This structured output will serve as both the TTS script and the video timeline for efficient processing.

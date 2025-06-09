@@ -156,10 +156,8 @@ class ProgressTracker:
         # Stage progress
         stage_icons = {
             ProcessingStage.INPUT_VALIDATION: "📋",
-            ProcessingStage.AUDIO_ACQUISITION: "🎵",
-            ProcessingStage.TRANSCRIPT_GENERATION: "📝",
+            ProcessingStage.AUDIO_ACQUISITION: "🎵",            ProcessingStage.TRANSCRIPT_GENERATION: "📝",
             ProcessingStage.CONTENT_ANALYSIS: "🤖",
-            ProcessingStage.FILE_ORGANIZATION: "📁",
             ProcessingStage.PODCAST_GENERATION: "🎙️",
             ProcessingStage.AUDIO_GENERATION: "🔊",
             ProcessingStage.VIDEO_CLIP_EXTRACTION: "✂️",
@@ -169,10 +167,8 @@ class ProgressTracker:
         
         stage_names = {
             ProcessingStage.INPUT_VALIDATION: "Input validation",
-            ProcessingStage.AUDIO_ACQUISITION: "Audio acquisition",
-            ProcessingStage.TRANSCRIPT_GENERATION: "Transcript generation",
+            ProcessingStage.AUDIO_ACQUISITION: "Audio acquisition",            ProcessingStage.TRANSCRIPT_GENERATION: "Transcript generation",
             ProcessingStage.CONTENT_ANALYSIS: "Content analysis",
-            ProcessingStage.FILE_ORGANIZATION: "File organization",
             ProcessingStage.PODCAST_GENERATION: "Podcast generation",
             ProcessingStage.AUDIO_GENERATION: "Audio generation",
             ProcessingStage.VIDEO_CLIP_EXTRACTION: "Video clip extraction",

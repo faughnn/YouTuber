@@ -52,6 +52,10 @@ import importlib.util
 import subprocess
 from typing import Dict, List, Optional, Any
 from pathlib import Path
+from datetime import datetime
+
+# Third-party imports
+import google.generativeai as genai
 
 # Add the Code directory to the path so we can import our modules
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -73,31 +77,21 @@ try:
     content_analysis_path = os.path.join(script_dir, "Content_Analysis", "transcript_analyzer.py")
     spec = importlib.util.spec_from_file_location("transcript_analyzer", content_analysis_path)
     transcript_analyzer = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(transcript_analyzer)
-    # Extract the functions we need
+    spec.loader.exec_module(transcript_analyzer)    # Extract the functions we need
     load_transcript = transcript_analyzer.load_transcript
-    analyze_with_gemini = transcript_analyzer.analyze_with_gemini
+    analyze_with_gemini_file_upload = transcript_analyzer.analyze_with_gemini_file_upload
+    upload_transcript_to_gemini = transcript_analyzer.upload_transcript_to_gemini
     load_analysis_rules = transcript_analyzer.load_analysis_rules
-    configure_gemini = transcript_analyzer.configure_gemini
-      # Import podcast narrative generator
+    configure_gemini = transcript_analyzer.configure_gemini    # Import podcast narrative generator (new single-call version)
     podcast_generator_path = os.path.join(script_dir, "Content_Analysis", "podcast_narrative_generator.py")
     spec = importlib.util.spec_from_file_location("podcast_narrative_generator", podcast_generator_path)
     podcast_generator_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(podcast_generator_module)
-    PodcastNarrativeGenerator = podcast_generator_module.PodcastNarrativeGenerator
-      # Import TTS processor
-    tts_processor_path = os.path.join(script_dir, "TTS", "core", "podcast_tts_processor.py")
-    spec = importlib.util.spec_from_file_location("podcast_tts_processor", tts_processor_path)
-    tts_processor_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(tts_processor_module)
-    PodcastTTSProcessor = tts_processor_module.PodcastTTSProcessor
-    
-    # Import video processing modules
-    video_clipper_path = os.path.join(script_dir, "Video_Clipper", "analysis_video_clipper.py")
-    spec = importlib.util.spec_from_file_location("analysis_video_clipper", video_clipper_path)
-    video_clipper_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(video_clipper_module)
-    AnalysisVideoClipper = video_clipper_module
+    NarrativeCreatorGenerator = podcast_generator_module.NarrativeCreatorGenerator    # Import Audio Generation module
+    from Audio_Generation import AudioBatchProcessor, ProcessingReport
+    from Audio_Generation.config import AudioGenerationConfig
+      # Import video processing modules
+    from Video_Clipper.integration import extract_clips_from_script
     
     # Import video editor modules
     timeline_builder_path = os.path.join(script_dir, "Video_Editor", "timeline_builder.py")
@@ -110,20 +104,10 @@ try:
     spec = importlib.util.spec_from_file_location("video_assembler", video_assembler_path)
     video_assembler_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(video_assembler_module)
-    VideoAssembler = video_assembler_module.VideoAssembler
-      # Import TTS generator from the new TTS module
-    try:
-        from TTS.core.tts_generator import SimpleTTSGenerator
-    except ImportError:
-        # Fallback to legacy import location
-        tts_generator_path = os.path.join(script_dir, "Content_Analysis", "simple_tts_generator.py")
-        if os.path.exists(tts_generator_path):
-            spec = importlib.util.spec_from_file_location("simple_tts_generator", tts_generator_path)
-            tts_generator_module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(tts_generator_module)
-            SimpleTTSGenerator = tts_generator_module.SimpleTTSGenerator
-        else:
-            SimpleTTSGenerator = None
+    VideoAssembler = video_assembler_module.VideoAssembler    
+    # Import Audio Generation module
+    from Audio_Generation import AudioBatchProcessor, ProcessingReport
+    from Audio_Generation.config import AudioGenerationConfig
 except ImportError as e:
     print(f"Error importing processing modules: {e}")
     print("Make sure you're running this script from the Code directory.")
@@ -233,12 +217,11 @@ class MasterProcessor:
             file_handler.setLevel(log_level)
             file_handler.setFormatter(detailed_formatter)
             logger.addHandler(file_handler)
-        
-        # Console handler
+          # Console handler
         if self.config['logging']['console_output']:
             console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setLevel(logging.WARNING)  # Only warnings and errors to console
-            console_handler.setFormatter(simple_formatter)
+            console_handler.setLevel(logging.INFO)  # Show info messages for file upload progress
+            console_handler.setFormatter(detailed_formatter)  # Use detailed formatter for better visibility
             logger.addHandler(console_handler)
         
         return logger
@@ -248,7 +231,7 @@ class MasterProcessor:
         try:
             # Try to configure Gemini API
             if not configure_gemini():
-                # If the imported configure_gemini fails, try using our config                import google.generativeai as genai
+                # If the imported configure_gemini fails, try using our config
                 api_key = self.config['api'].get('gemini_api_key')
                 if api_key:
                     genai.configure(api_key=api_key)
@@ -477,38 +460,42 @@ class MasterProcessor:
                 if not audio_path or "Error" in audio_path or not os.path.exists(audio_path):
                     raise RuntimeError(f"YouTube audio download failed: {audio_path}")
                 
-                results['audio_path'] = audio_path
-                
-                # Download video if enabled in config (default: true)
+                results['audio_path'] = audio_path                # Download video if enabled in config (default: true)
                 if self.config.get('video', {}).get('always_download_video', True):
-                    self.progress_tracker.update_stage_progress(40, "Downloading video from YouTube")
-                    try:
-                        # Extract episode name from audio file for consistent naming
-                        audio_basename = os.path.splitext(os.path.basename(audio_path))[0]
-                        episode_folder = os.path.join(
-                            self.config['paths']['video_output'],
-                            audio_basename
-                        )
-                        
-                        # Create episode folder if it doesn't exist
-                        os.makedirs(episode_folder, exist_ok=True)
-                        
-                        # Download video with retry mechanism using the function
-                        video_path = self.error_handler.retry_with_backoff(
-                            download_youtube_video,
-                            input_info['info']['url'],
-                            stage="video_acquisition",
-                            context="YouTube video download"
-                        )
-                        
-                        if video_path and os.path.exists(video_path):
-                            results['video_path'] = video_path
-                            self.logger.info(f"Video downloaded successfully: {video_path}")
-                        else:
-                            self.logger.warning("Video download failed, continuing with audio-only processing")
+                    self.progress_tracker.update_stage_progress(40, "Checking for existing video file")
+                    
+                    # Check if video file already exists
+                    video_title = self._extract_youtube_title(input_info['info']['url'])
+                    episode_input_folder = self.file_organizer.get_episode_input_folder(video_title)
+                    expected_video_path = os.path.join(episode_input_folder, "original_video.mp4")
+                    
+                    if os.path.exists(expected_video_path):
+                        self.progress_tracker.update_stage_progress(70, "Video file already exists, skipping download")
+                        results['video_path'] = expected_video_path
+                        self.logger.info(f"Video file already exists, skipping download: {expected_video_path}")
+                    else:
+                        self.progress_tracker.update_stage_progress(50, "Downloading video from YouTube")
+                        try:
+                            self.logger.info(f"Extracted video title: {video_title}")
                             
-                    except Exception as e:
-                        self.logger.warning(f"Video download failed: {e}, continuing with audio-only processing")
+                            # Download video with retry mechanism using the function
+                            # The download_youtube_video function will extract the title again internally,
+                            # ensuring consistent episode folder placement
+                            video_path = self.error_handler.retry_with_backoff(
+                                download_youtube_video,
+                                input_info['info']['url'],
+                                stage="video_acquisition",
+                                context="YouTube video download"
+                            )
+                            
+                            if video_path and os.path.exists(video_path):
+                                results['video_path'] = video_path
+                                self.logger.info(f"Video downloaded successfully: {video_path}")
+                            else:
+                                self.logger.warning("Video download failed, continuing with audio-only processing")
+                                
+                        except Exception as e:
+                            self.logger.warning(f"Video download failed: {e}, continuing with audio-only processing")
                     
                     self.progress_tracker.update_stage_progress(80, "Downloads complete")
                 
@@ -654,14 +641,8 @@ class MasterProcessor:
                 self.progress_tracker.update_stage_progress(100, "Using existing analysis")
                 self.progress_tracker.complete_stage(ProcessingStage.CONTENT_ANALYSIS)
                 return analysis_path
-            
-            # Load transcript
-            self.progress_tracker.update_stage_progress(10, "Loading transcript")
-            transcript_text, metadata = load_transcript(transcript_path)
-            
-            if not transcript_text:
-                raise ValueError(f"Failed to load transcript from: {transcript_path}")            # Auto-detect episode type and select appropriate rules
-            self.progress_tracker.update_stage_progress(20, "Detecting episode type and loading analysis rules")
+              # Auto-detect episode type and select appropriate rules
+            self.progress_tracker.update_stage_progress(15, "Detecting episode type and loading analysis rules")
             
             # Use audio_path if available, otherwise extract from transcript path
             if audio_path:
@@ -677,18 +658,33 @@ class MasterProcessor:
             analysis_rules = load_analysis_rules(analysis_rules_file)
             
             if not analysis_rules:
-                raise ValueError("No analysis rules loaded")
+                raise ValueError("No analysis rules loaded")            # CRITICAL: Perform analysis using FILE UPLOAD method to avoid safety blocks
+            self.progress_tracker.update_stage_progress(25, "Uploading transcript file to Gemini")
+            self.logger.info(f"Using file upload method for transcript analysis (no fallback to text embedding)")
             
-            # CRITICAL: Perform analysis WITHOUT chunking - send full transcript
-            self.progress_tracker.update_stage_progress(30, "Analyzing full transcript (no chunking)")
-            self.logger.info(f"Sending full transcript to Gemini (length: {len(transcript_text)} characters)")
-              # Use retry mechanism for API call
+            # Create display name for uploaded file
+            episode_title = os.path.basename(os.path.dirname(analysis_path))
+            timestamp = datetime.now().strftime('%Y%m%d')
+            display_name = f"{episode_title}_transcript_{timestamp}"
+              # Upload transcript file to Gemini (required - no fallback)
+            file_object = upload_transcript_to_gemini(transcript_path, display_name)
+            if not file_object:
+                raise ValueError("File upload to Gemini failed - this is required for content analysis to avoid safety blocks")
+            
+            # Perform analysis using file upload method
+            self.progress_tracker.update_stage_progress(40, "Analyzing transcript with file upload method")
+            
+            # Get the Processing folder path for saving the prompt
+            processing_folder = os.path.dirname(analysis_path)
+            
+            # Use retry mechanism for file upload API call
             analysis_result = self.error_handler.retry_with_backoff(
-                analyze_with_gemini,
-                transcript_text,  # Full transcript
+                analyze_with_gemini_file_upload,
+                file_object,  # File object instead of transcript text
                 analysis_rules,
+                processing_folder,  # Add processing folder for prompt saving
                 stage="content_analysis",
-                context="Gemini API call"
+                context="Gemini File Upload API call"
             )
             
             if not analysis_result:
@@ -767,218 +763,174 @@ ANALYSIS RESULTS:
             if os.path.exists(joe_rogan_rules):
                 self.logger.info(f"Detected Joe Rogan episode, using specialized rules: {joe_rogan_rules}")
                 return joe_rogan_rules
-            else:
-                self.logger.warning(f"Joe Rogan rules file not found at {joe_rogan_rules}, using default rules")
-          # For other episodes, use default rules
+            else:                self.logger.warning(f"Joe Rogan rules file not found at {joe_rogan_rules}, using default rules")
+        
+        # For other episodes, use default rules
         default_rules = self.config['paths']['analysis_rules']
         self.logger.info(f"Using default analysis rules: {default_rules}")
         return default_rules
     
     def _stage_6_podcast_generation(self, analysis_path: str, episode_title: str, 
                                    template_name: str = "podcast_narrative_prompt.txt") -> Optional[str]:
-        """Stage 6: Generate Podcast Script from Analysis."""
+        """Stage 6: Generate Unified Podcast Script-Timeline from Analysis (Single Call)."""
         self.progress_tracker.start_stage(ProcessingStage.PODCAST_GENERATION, estimated_duration=30)
-        self.logger.info("Starting podcast script generation")
+        self.logger.info("Starting unified podcast script generation")
         
         try:
-            # Initialize podcast generator
-            self.progress_tracker.update_stage_progress(10, "Initializing podcast generator")
-            generator = PodcastNarrativeGenerator()
+            # Initialize narrative creator generator
+            self.progress_tracker.update_stage_progress(10, "Initializing narrative creator generator")
+            generator = NarrativeCreatorGenerator()
             
-            # Generate script
-            self.progress_tracker.update_stage_progress(30, "Generating podcast script with Gemini")
-            script_data = generator.generate_podcast_script(
+            # Generate unified script-timeline structure
+            self.progress_tracker.update_stage_progress(30, "Generating unified script-timeline with Gemini")
+            script_data = generator.generate_unified_narrative(
                 analysis_path, 
-                episode_title, 
-                template_name
-            )            # Save script files
-            self.progress_tracker.update_stage_progress(70, "Saving podcast script files")
+                episode_title
+            )
             
-            # Get the transcript path from analysis path to derive proper folder structure
+            # Save unified script file
+            self.progress_tracker.update_stage_progress(70, "Saving unified script file")
+              # Get the transcript path from analysis path to derive proper folder structure
             # analysis_path is in Processing folder, we need to get the corresponding transcript in Input folder
             analysis_dir = os.path.dirname(analysis_path)  # Processing folder
             episode_dir = os.path.dirname(analysis_dir)   # Episode folder
-            input_dir = os.path.join(episode_dir, 'Input')
             
-            # Extract base name and create transcript path
-            analysis_basename = os.path.basename(analysis_path)
-            base_name = analysis_basename.replace('_analysis.txt', '').replace('_analysis_analysis.txt', '')
-            transcript_path = os.path.join(input_dir, f"{base_name}.json")
-            
-            # Use new folder structure - get Output/Scripts path
-            script_output_path = self.file_organizer.get_podcast_script_output_path(
-                transcript_path, 
-                f"{base_name}_podcast_script"
-            )
-            
-            json_path, txt_path = generator.save_podcast_script(script_data, script_output_path)
+            # Save unified script to Output/Scripts folder
+            episode_output_dir = os.path.join(episode_dir, "Output")
+            saved_script_path = generator.save_unified_script(script_data, episode_output_dir)
             
             # Log results
-            self.progress_tracker.update_stage_progress(90, "Generating podcast summary")
-            theme = script_data.get('narrative_theme', 'Unknown')
-            selected_clips = len(script_data.get('selected_clips', []))
+            self.progress_tracker.update_stage_progress(90, "Analyzing script structure")
+            narrative_theme = script_data.get('narrative_theme', 'Unknown')
+            timeline_segments = len(script_data.get('timeline', []))
+            script_segments = len(script_data.get('script', []))
             
-            self.logger.info(f"Podcast script generated successfully:")
-            self.logger.info(f"  JSON Structure: {json_path}")
-            self.logger.info(f"  Readable Script: {txt_path}")
-            self.logger.info(f"  Narrative Theme: {theme}")
-            self.logger.info(f"  Selected Clips: {selected_clips}")
-            self.progress_tracker.update_stage_progress(100, "Podcast generation complete")
+            self.logger.info(f"Unified podcast script generated successfully:")
+            self.logger.info(f"  Script File: {saved_script_path}")
+            self.logger.info(f"  Narrative Theme: {narrative_theme}")
+            self.logger.info(f"  Timeline Segments: {timeline_segments}")
+            self.logger.info(f"  Script Segments: {script_segments}")
+            self.progress_tracker.update_stage_progress(100, "Unified script generation complete")
             self.progress_tracker.complete_stage(ProcessingStage.PODCAST_GENERATION)
-            return str(json_path)
-            
+            return str(saved_script_path)
         except Exception as e:
             self.progress_tracker.fail_stage(ProcessingStage.PODCAST_GENERATION, str(e))
-            self.logger.error(f"Podcast generation failed: {e}")
+            self.logger.error(f"Unified script generation failed: {e}")
             return None
+
     def _stage_7_audio_generation(self, podcast_script_path: str, episode_title: str) -> Optional[str]:
-        """Stage 7: Generate Audio from Podcast Script using TTS."""
-        self.progress_tracker.start_stage(ProcessingStage.AUDIO_GENERATION, estimated_duration=60)
-        self.logger.info("Starting audio generation from podcast script")
+        """Stage 7: Generate Audio from Podcast Script using Audio_Generation module."""
+        self.progress_tracker.start_stage(ProcessingStage.AUDIO_GENERATION, estimated_duration=120)
+        self.logger.info("Starting structured audio generation from podcast script")
         
         try:
-            # Initialize TTS processor
-            self.progress_tracker.update_stage_progress(10, "Initializing TTS processor")
+            # Initialize Audio Generation system
+            self.progress_tracker.update_stage_progress(10, "Initializing Audio Generation system")
+            batch_processor = AudioBatchProcessor()
             
-            # Use the new PodcastTTSProcessor if available, otherwise fallback to SimpleTTSGenerator
-            if PodcastTTSProcessor:
-                tts_processor = PodcastTTSProcessor()
-                
-                # Load podcast script
-                self.progress_tracker.update_stage_progress(20, "Loading podcast script")
-                  # Generate audio using the structured TTS processor
-                self.progress_tracker.update_stage_progress(30, "Generating structured audio with TTS")
-                
-                audio_results = tts_processor.generate_podcast_audio(
-                    tts_script_path=podcast_script_path
+            # Process the podcast script
+            self.progress_tracker.update_stage_progress(20, "Processing podcast script sections")
+            processing_report = batch_processor.process_episode_script(podcast_script_path)
+            
+            # Update progress based on processing results
+            if processing_report.successful_sections > 0:
+                success_rate = processing_report.successful_sections / processing_report.total_sections
+                progress_value = 50 + int(success_rate * 40)  # 50-90 based on success rate
+                self.progress_tracker.update_stage_progress(
+                    progress_value, 
+                    f"Generated {processing_report.successful_sections}/{processing_report.total_sections} audio sections"
                 )
                 
-                if audio_results and audio_results.get('successful_segments', 0) > 0:
-                    output_dir = audio_results.get('output_directory')
-                    generated_files = audio_results.get('generated_files', [])
-                    successful_segments = audio_results.get('successful_segments', 0)
-                    total_segments = audio_results.get('total_segments', 0)
-                    
-                    self.progress_tracker.update_stage_progress(90, "TTS generation complete")
-                    self.logger.info(f"TTS audio generated successfully:")
-                    self.logger.info(f"  Output Directory: {output_dir}")
-                    self.logger.info(f"  Generated Files: {len(generated_files)}")
-                    self.logger.info(f"  Success Rate: {successful_segments}/{total_segments}")
-                    
-                    self.progress_tracker.update_stage_progress(100, "Audio generation complete")
-                    self.progress_tracker.complete_stage(ProcessingStage.AUDIO_GENERATION)
-                    
-                    return output_dir
-                else:
-                    raise Exception("TTS generation failed - no audio files created")
-                    
-            elif SimpleTTSGenerator:
-                # Fallback to simple TTS generator
-                self.progress_tracker.update_stage_progress(10, "Using fallback TTS generator")
-                tts_generator = SimpleTTSGenerator()
+                # Log detailed results
+                self.logger.info(f"Audio generation completed:")
+                self.logger.info(f"  Output Directory: {processing_report.output_directory}")
+                self.logger.info(f"  Success Rate: {processing_report.successful_sections}/{processing_report.total_sections}")
+                self.logger.info(f"  Generated Files: {len(processing_report.generated_files)}")
+                self.logger.info(f"  Processing Time: {processing_report.processing_time:.2f} seconds")
                 
-                # Load podcast script
-                self.progress_tracker.update_stage_progress(20, "Loading podcast script")
-                with open(podcast_script_path, 'r', encoding='utf-8') as f:
-                    script_data = json.load(f)
+                if processing_report.errors:
+                    self.logger.warning(f"  Errors encountered: {len(processing_report.errors)}")
+                    for error in processing_report.errors:
+                        self.logger.warning(f"    - {error}")
                 
-                # Extract readable script text
-                if 'readable_script' in script_data:
-                    script_text = script_data['readable_script']
-                else:
-                    # Fallback: construct from selected clips
-                    clips = script_data.get('selected_clips', [])
-                    script_text = f"# {script_data.get('narrative_theme', episode_title)}\n\n"
-                    for clip in clips:
-                        script_text += f"{clip.get('analysis', '')}\n\n"
-                  # Generate audio
-                self.progress_tracker.update_stage_progress(30, "Generating audio with fallback TTS")
+                self.progress_tracker.update_stage_progress(100, "Audio generation complete")
+                self.progress_tracker.complete_stage(ProcessingStage.AUDIO_GENERATION)
                 
-                # Create output filename
-                base_name = os.path.splitext(os.path.basename(podcast_script_path))[0]
-                audio_filename = f"{base_name}_audio.wav"
-                  # Generate audio using TTS
-                audio_filename = f"{base_name}_audio.wav"
-                success = tts_generator.generate_audio(
-                    text=script_text,
-                    output_filename=audio_filename,
-                    voice_style="normal"
-                )
-                
-                if success and os.path.exists(success):
-                    # The generate_audio method returns the full path
-                    audio_output_path = success
-                    # Get file size for logging
-                    file_size = os.path.getsize(audio_output_path) / (1024 * 1024)  # MB
-                    
-                    self.progress_tracker.update_stage_progress(90, "Audio generation complete")
-                    self.logger.info(f"Audio generated successfully:")
-                    self.logger.info(f"  Audio File: {audio_output_path}")
-                    self.logger.info(f"  File Size: {file_size:.2f} MB")
-                    
-                    self.progress_tracker.update_stage_progress(100, "Audio generation complete")
-                    self.progress_tracker.complete_stage(ProcessingStage.AUDIO_GENERATION)
-                    
-                    return audio_output_path
-                else:
-                    raise Exception("Audio generation failed - output file not created")
-            else:
-                raise Exception("No TTS generator available")
+                return processing_report.output_directory
+            else:                # Complete failure - no fallback
+                error_msg = f"Audio generation failed completely: {len(processing_report.errors)} errors"
+                if processing_report.errors:
+                    error_msg += f". First error: {processing_report.errors[0]}"
+                raise Exception(error_msg)
                 
         except Exception as e:
             self.progress_tracker.fail_stage(ProcessingStage.AUDIO_GENERATION, str(e))
             self.logger.error(f"Audio generation failed: {e}")
-            return None
+            raise  # Re-raise to stop pipeline execution
 
     def _stage_8_video_clip_extraction(self, analysis_path: str, video_path: str, 
                                       podcast_script_path: Optional[str] = None) -> Optional[str]:
-        """Stage 8: Extract Video Clips from Analysis Results."""
+        """Stage 8: Extract Video Clips from Unified Podcast Script."""
         self.progress_tracker.start_stage(ProcessingStage.VIDEO_CLIP_EXTRACTION, estimated_duration=120)
-        self.logger.info("Starting video clip extraction")
+        self.logger.info("Starting script-based video clip extraction")
         
         try:
+            # Determine episode directory from video path
+            episode_dir = os.path.dirname(os.path.dirname(video_path))  # Go up from Input/ to episode root
+            
+            # Check if video file exists
             if not video_path or not os.path.exists(video_path):
                 self.logger.warning("No video file available for clip extraction")
                 self.progress_tracker.complete_stage(ProcessingStage.VIDEO_CLIP_EXTRACTION)
                 return None
             
-            # Extract clips using analysis_video_clipper
-            self.progress_tracker.update_stage_progress(10, "Initializing video clipper")
+            # Check if unified script exists
+            script_path = os.path.join(episode_dir, "Output", "Scripts", "unified_podcast_script.json")
+            if not os.path.exists(script_path):
+                self.logger.warning("No unified podcast script found - skipping video clip extraction")
+                self.progress_tracker.complete_stage(ProcessingStage.VIDEO_CLIP_EXTRACTION)
+                return None
             
-            # Create output directory for clips
-            video_episode_folder = os.path.dirname(video_path)
-            clips_output_dir = os.path.join(video_episode_folder, "clips")
-            os.makedirs(clips_output_dir, exist_ok=True)
+            self.progress_tracker.update_stage_progress(10, "Initializing script-based video clipper")
             
-            self.progress_tracker.update_stage_progress(30, "Extracting video clips")
+            # Extract clips using script-based clipper
+            self.progress_tracker.update_stage_progress(30, "Extracting video clips from script")
             
-            # Use the analysis_video_clipper module
-            # Call the main extraction function with appropriate parameters
-            extract_clips_result = self.error_handler.retry_with_backoff(
-                AnalysisVideoClipper.extract_clips_from_analysis,
-                analysis_path,
-                video_path,
-                clips_output_dir,
-                start_buffer=self.config.get('video', {}).get('clip_extraction', {}).get('start_buffer_seconds', 3.0),
-                end_buffer=self.config.get('video', {}).get('clip_extraction', {}).get('end_buffer_seconds', 0.0),
+            # Get buffer settings from config
+            start_buffer = self.config.get('video', {}).get('clip_extraction', {}).get('start_buffer_seconds', 3.0)
+            end_buffer = self.config.get('video', {}).get('clip_extraction', {}).get('end_buffer_seconds', 0.0)
+            
+            # Extract clips using the new script-based approach
+            extract_result = self.error_handler.retry_with_backoff(
+                extract_clips_from_script,
+                episode_dir,
+                "unified_podcast_script.json",
+                start_buffer,
+                end_buffer,
                 stage="video_clip_extraction",
-                context="Video clip extraction"
+                context="Script-based video clip extraction"
             )
             
-            if extract_clips_result:
-                clip_count = len([f for f in os.listdir(clips_output_dir) if f.endswith('.mp4')])
+            if extract_result and extract_result.get('success'):
+                clips_created = extract_result.get('clips_created', 0)
+                output_dir = extract_result.get('output_directory')
                 
-                self.progress_tracker.update_stage_progress(90, f"Extracted {clip_count} video clips")
+                self.progress_tracker.update_stage_progress(90, f"Extracted {clips_created} video clips")
                 self.logger.info(f"Video clip extraction successful:")
-                self.logger.info(f"  Clips Directory: {clips_output_dir}")
-                self.logger.info(f"  Extracted Clips: {clip_count}")
+                self.logger.info(f"  Clips Directory: {output_dir}")
+                self.logger.info(f"  Extracted Clips: {clips_created}")
+                
+                if clips_created > 0:
+                    success_rate = extract_result.get('success_rate', 'N/A')
+                    self.logger.info(f"  Success Rate: {success_rate}")
                 
                 self.progress_tracker.update_stage_progress(100, "Video clip extraction complete")
                 self.progress_tracker.complete_stage(ProcessingStage.VIDEO_CLIP_EXTRACTION)
                 
-                return clips_output_dir
+                return output_dir
             else:
-                raise Exception("Video clip extraction failed")
+                error_msg = extract_result.get('error', 'Unknown error') if extract_result else 'Extract function returned None'
+                raise Exception(f"Video clip extraction failed: {error_msg}")
                 
         except Exception as e:
             self.progress_tracker.fail_stage(ProcessingStage.VIDEO_CLIP_EXTRACTION, str(e))
@@ -1255,7 +1207,6 @@ ANALYSIS RESULTS:
         print(f"\r{progress_display}", end="", flush=True)
   
     
-    # ...existing code...
 def create_argument_parser() -> argparse.ArgumentParser:
     """Create and configure the argument parser."""
     parser = argparse.ArgumentParser(

@@ -369,14 +369,13 @@ class TestStage3MVP:
         assert "metadata" in transcript_data, "Audio transcript should have metadata"
         assert "segments" in transcript_data, "Audio transcript should have segments"
         
-        assert isinstance(youtube_result, str), "YouTube transcript should be formatted string"
-          # Verify function calls
+        assert isinstance(youtube_result, str), "YouTube transcript should be formatted string"        # Verify function calls
         mock_diarize_audio.assert_called_once_with(stage_2_results["audio_path"], "test_hf_token")
         mock_get_transcript.assert_called_once_with(stage_2_results["video_id"], ['en'])
     
     @patch('os.makedirs')
     @patch('tests.unit.test_stage_3_mvp.diarize_audio')
-    def test_file_organization_integration(self, mock_diarize_audio, mock_makedirs):
+    def test_transcript_episode_organization(self, mock_diarize_audio, mock_makedirs):
         """Test transcript files are saved with correct episode organization."""
         
         # Setup episode context

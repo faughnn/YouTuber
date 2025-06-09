@@ -17,10 +17,20 @@ import os
 # Import FileOrganizer for consistent path management
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from Utils.file_organizer import FileOrganizer
-from .youtube_url_utils import YouTubeUrlUtils
 
-def download_video(video_url_or_id):
-    """Downloads the video from a YouTube video using yt-dlp and saves it as MP4 directly to the episode Input folder."""
+# Handle both relative and absolute imports
+try:
+    from .youtube_url_utils import YouTubeUrlUtils
+except ImportError:
+    from youtube_url_utils import YouTubeUrlUtils
+
+def download_video(video_url_or_id, file_organizer=None):
+    """Downloads the video from a YouTube video using yt-dlp and saves it as MP4 directly to the episode Input folder.
+    
+    Args:
+        video_url_or_id: YouTube URL or video ID
+        file_organizer: Optional FileOrganizer instance. If not provided, will create one with default paths.
+    """
     try:
         # Validate and normalize input using YouTubeUrlUtils
         validation_result = YouTubeUrlUtils.validate_input(video_url_or_id)
@@ -47,7 +57,14 @@ def download_video(video_url_or_id):
         video_title = process.stdout.strip()
         
         # Get the episode Input folder using FileOrganizer
-        file_organizer = FileOrganizer()
+        if file_organizer is None:
+            # Create FileOrganizer with default paths if not provided
+            default_base_paths = {
+                'episode_base': 'Content',
+                'analysis_rules': 'Code/Content_Analysis/Rules/Joe_Rogan_selective_analysis_rules.txt'
+            }
+            file_organizer = FileOrganizer(default_base_paths)
+        
         episode_input_folder = file_organizer.get_episode_input_folder(video_title)
         
         # Create the Input folder if it doesn't exist

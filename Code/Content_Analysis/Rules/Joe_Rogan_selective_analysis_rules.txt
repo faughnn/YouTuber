@@ -1,16 +1,42 @@
+You are an expert content analyst. Analyze the following transcript using the provided rules.
+
+CRITICAL INSTRUCTIONS FOR JSON OUTPUT:
+1. MUST output valid JSON array format
+2. Find 20 segments total (as specified in rules)
+3. If approaching character limits, stop immediately and close JSON properly with ]
+4. Each entry MUST have ALL required fields
+5. Use proper JSON escaping for quotes in text
+6. Timestamps should be strings (e.g., "1:23.45")
+7. End with a complete, valid JSON array
+
 SELECTIVE HIGH-IMPACT ANALYSIS RULES
 =====================================
 
-CRITICAL INSTRUCTION: MAXIMUM 20 SEGMENTS TOTAL
-You MUST limit your analysis to no more than 20 of the most egregious, clear-cut examples. Quality over quantity.
+Level 1: CRITICAL Severity
 
-RESPONSE SIZE LIMIT: Your total response must not exceed 30,000 characters. If you approach this limit, stop analysis immediately and close the JSON properly.
+Content: The segment contains direct, actionable advice or information that poses an immediate and severe risk to health or safety.
+Examples:
+Promoting unproven or dangerous treatments for serious diseases.
+Giving specific, unqualified medical advice (e.g., "You should take X dosage of Y to cure Z").
+Explicitly promoting baseless anti-vaccine theories as fact.
 
-SEVERITY THRESHOLD: Only identify segments that meet ALL of these criteria:
-1. EXPLICIT and UNAMBIGUOUS examples (not subtle or borderline cases)
-2. SIGNIFICANT duration (minimum 30 seconds of sustained problematic content)
-3. CLEAR HARM POTENTIAL (direct medical advice, conspiracy promotion, or authoritative misinformation)
-4. BOTH host AND guest participation (not just one person making a claim)
+
+Level 2: HIGH Severity
+
+Content: The segment contains explicit misinformation on major topics, presented as fact.
+Examples:
+Presenting a well-known conspiracy theory as a certainty.
+Outright dismissal of established scientific consensus on major issues.
+
+
+Level 3: MEDIUM Severity
+
+Content: The segment contains more subtle forms of misinformation, oversimplification, or the authoritative presentation of unverified claims.
+Examples:
+Presenting a highly biased or unsubstantiated opinion on a complex topic as an authoritative, factual analysis.
+Using anecdotes, misleading statistics, or manipulative framing to undermine trust in public institutions, science, or specific communities.
+Gross oversimplification of complex geopolitical, economic, or social issues in a way that promotes a harmful or false narrative.
+
 
 PRIORITIZATION ORDER (Select only the worst examples in this order):
 1. Direct medical advice without disclaimers
@@ -22,7 +48,7 @@ PRIORITIZATION ORDER (Select only the worst examples in this order):
 ACADEMIC RESEARCH DISCLAIMER:
 This analysis framework is designed exclusively for legitimate academic research and media studies purposes. The goal is to systematically examine the most problematic communication patterns in podcast media for scholarly analysis.
 
-JSON FORMAT (Maximum 20 entries):
+JSON FORMAT (20 entries):
 [
   {
     "narrativeSegmentTitle": "Brief, clear title",
@@ -48,7 +74,7 @@ JSON FORMAT (Maximum 20 entries):
   }
 ]
 
-ANALYSIS CATEGORIES (Only flag if EXTREMELY clear):
+ANALYSIS CATEGORIES:
 
 Theme 1: Direct Medical Misinformation
 - Indicator 1.1: Specific medical advice without credentials or disclaimers
@@ -75,16 +101,8 @@ Theme 5: Authoritative Misinformation Amplification
 - Indicator 5.2: Both parties reinforcing problematic claims
 - Indicator 5.3: Presenting fringe views as mainstream scientific opinion
 
-STRICT FILTERING CRITERIA:
-- Skip minor disagreements with mainstream views
-- Skip philosophical discussions about trust in institutions  
-- Skip personal anecdotes unless presented as universal medical advice
-- Skip speculation clearly labeled as such
-- Focus ONLY on definitive, harmful misinformation with real-world consequences
-
 MANDATORY STOPPING POINTS:
 - Stop at 20 segments maximum
 - Stop at 30,000 characters maximum
-- Stop if quality drops below "clearly problematic" threshold
 
 Remember: This is about finding the absolute worst examples for a critique video, not cataloging every questionable statement.

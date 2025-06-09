@@ -82,8 +82,7 @@ class FileOrganizer:
         
         sanitized = filename
         for old, new in replacements.items():
-            sanitized = sanitized.replace(old, new)
-        
+            sanitized = sanitized.replace(old, new)        
         return sanitized.strip()
     def get_transcript_structure_paths(self, audio_filename: str) -> Tuple[str, str, str]:
         """
@@ -92,16 +91,30 @@ class FileOrganizer:
         Returns:
             Tuple of (channel_folder, episode_folder, transcript_file_path)
         """
+        # First, try to extract episode information from the directory path context
+        channel_name, episode_name = self.extract_channel_episode_from_path(audio_filename)
+        
+        if channel_name and episode_name:
+            # Use the existing directory structure
+            content_base = self.base_paths.get('episode_base', 'Content')
+            channel_folder = os.path.join(content_base, channel_name)
+            episode_folder = os.path.join(channel_folder, episode_name)
+        else:
+            # Fallback to filename-based extraction
+            base_name = os.path.splitext(os.path.basename(audio_filename))[0]
+            
+            # Extract channel name
+            channel_name = self.extract_channel_name(base_name)
+            
+            # Sanitize episode name
+            episode_name = self.sanitize_filename(base_name)
+            
+            # Build paths using new structure: Content/Series/Episode/Input/
+            content_base = self.base_paths.get('episode_base', 'Content')
+            channel_folder = os.path.join(content_base, channel_name)
+            episode_folder = os.path.join(channel_folder, episode_name)
+        
         base_name = os.path.splitext(os.path.basename(audio_filename))[0]
-        
-        # Extract channel name
-        channel_name = self.extract_channel_name(base_name)
-        
-        # Sanitize episode name
-        episode_name = self.sanitize_filename(base_name)        # Build paths using new structure: Content/Series/Episode/Input/
-        content_base = self.base_paths.get('episode_base', 'Content')
-        channel_folder = os.path.join(content_base, channel_name)
-        episode_folder = os.path.join(channel_folder, episode_name)
         input_folder = os.path.join(episode_folder, 'Input')
         transcript_file = os.path.join(input_folder, f"{base_name}_full_transcript.json")
         
@@ -339,3 +352,71 @@ class FileOrganizer:
             'clips_folder': video_output_dir,
             'final_video': os.path.join(video_output_dir, f"{base_name}_final.mp4")
         }
+    
+    def extract_channel_episode_from_path(self, audio_path: str) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Extract channel and episode information from the full directory path.
+        
+        This method analyzes the directory structure to identify if the audio file
+        is already in a proper episode structure and extracts the channel and episode names.
+        
+        Args:
+            audio_path: Full path to the audio file
+            
+        Returns:
+            Tuple of (channel_name, episode_name) or (None, None) if not found
+        """
+        try:
+            # Normalize path separators
+            normalized_path = os.path.normpath(audio_path)
+            path_parts = normalized_path.split(os.sep)
+            
+            # Look for Content directory in the path
+            content_index = -1
+            for i, part in enumerate(path_parts):
+                if part == 'Content':
+                    content_index = i
+                    break
+            
+            if content_index == -1:
+                return None, None
+            
+            # Path structure should be: .../Content/Channel/Episode/Input/audio.mp3
+            # So we need at least Content + Channel + Episode + Input + filename
+            if len(path_parts) < content_index + 5:
+                return None, None
+            
+            channel_name = path_parts[content_index + 1]
+            episode_name = path_parts[content_index + 2]
+            
+            # Validate that we're in the expected structure
+            expected_input_folder = path_parts[content_index + 3]
+            if expected_input_folder != 'Input':
+                return None, None
+            
+            # Check for known channel patterns to validate
+            if self._is_known_channel_pattern(channel_name, episode_name):
+                return channel_name, episode_name
+            
+            return None, None
+            
+        except (IndexError, AttributeError) as e:
+            self.logger.debug(f"Error extracting channel/episode from path {audio_path}: {e}")
+            return None, None
+    
+    def _is_known_channel_pattern(self, channel_name: str, episode_name: str) -> bool:
+        """Check if the channel and episode names match known patterns."""
+        # Check for Joe Rogan Experience pattern
+        if channel_name == "Joe_Rogan_Experience" and "Joe Rogan Experience" in episode_name:
+            return True
+        
+        # Check for other known patterns
+        if channel_name == "Lex_Fridman_Podcast" and "Lex Fridman" in episode_name:
+            return True
+            
+        if channel_name == "Tim_Ferriss_Show" and ("Tim Ferriss" in episode_name or "The Tim Ferriss Show" in episode_name):
+            return True
+        
+        # If channel name doesn't match episode content, it might be a generic structure
+        # that we should preserve if it follows the Content/Channel/Episode/Input pattern
+        return True  # For now, trust the directory structure if it's in the right format
