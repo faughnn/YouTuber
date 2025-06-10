@@ -77,37 +77,23 @@ try:
     content_analysis_path = os.path.join(script_dir, "Content_Analysis", "transcript_analyzer.py")
     spec = importlib.util.spec_from_file_location("transcript_analyzer", content_analysis_path)
     transcript_analyzer = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(transcript_analyzer)    # Extract the functions we need
-    load_transcript = transcript_analyzer.load_transcript
+    spec.loader.exec_module(transcript_analyzer)    # Extract the functions we need    load_transcript = transcript_analyzer.load_transcript
     analyze_with_gemini_file_upload = transcript_analyzer.analyze_with_gemini_file_upload
     upload_transcript_to_gemini = transcript_analyzer.upload_transcript_to_gemini
     load_analysis_rules = transcript_analyzer.load_analysis_rules
-    configure_gemini = transcript_analyzer.configure_gemini    # Import podcast narrative generator (new single-call version)
+    configure_gemini = transcript_analyzer.configure_gemini
+    save_analysis_improved = transcript_analyzer.save_analysis_improved# Import podcast narrative generator (new single-call version)
     podcast_generator_path = os.path.join(script_dir, "Content_Analysis", "podcast_narrative_generator.py")
     spec = importlib.util.spec_from_file_location("podcast_narrative_generator", podcast_generator_path)
     podcast_generator_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(podcast_generator_module)
     NarrativeCreatorGenerator = podcast_generator_module.NarrativeCreatorGenerator    # Import Audio Generation module
     from Audio_Generation import AudioBatchProcessor, ProcessingReport
-    from Audio_Generation.config import AudioGenerationConfig
-      # Import video processing modules
+    from Audio_Generation.config import AudioGenerationConfig    # Import video processing modules
     from Video_Clipper.integration import extract_clips_from_script
+      # Import Video_Compilator module
+    from Video_Compilator import SimpleCompiler
     
-    # Import video editor modules
-    timeline_builder_path = os.path.join(script_dir, "Video_Editor", "timeline_builder.py")
-    spec = importlib.util.spec_from_file_location("timeline_builder", timeline_builder_path)
-    timeline_builder_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(timeline_builder_module)
-    TimelineBuilder = timeline_builder_module.TimelineBuilder
-    
-    video_assembler_path = os.path.join(script_dir, "Video_Editor", "video_assembler.py")
-    spec = importlib.util.spec_from_file_location("video_assembler", video_assembler_path)
-    video_assembler_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(video_assembler_module)
-    VideoAssembler = video_assembler_module.VideoAssembler    
-    # Import Audio Generation module
-    from Audio_Generation import AudioBatchProcessor, ProcessingReport
-    from Audio_Generation.config import AudioGenerationConfig
 except ImportError as e:
     print(f"Error importing processing modules: {e}")
     print("Make sure you're running this script from the Code directory.")
@@ -459,8 +445,9 @@ class MasterProcessor:
                 
                 if not audio_path or "Error" in audio_path or not os.path.exists(audio_path):
                     raise RuntimeError(f"YouTube audio download failed: {audio_path}")
+                results['audio_path'] = audio_path
                 
-                results['audio_path'] = audio_path                # Download video if enabled in config (default: true)
+                # Download video if enabled in config (default: true)
                 if self.config.get('video', {}).get('always_download_video', True):
                     self.progress_tracker.update_stage_progress(40, "Checking for existing video file")
                     
@@ -478,14 +465,10 @@ class MasterProcessor:
                         try:
                             self.logger.info(f"Extracted video title: {video_title}")
                             
-                            # Download video with retry mechanism using the function
-                            # The download_youtube_video function will extract the title again internally,
-                            # ensuring consistent episode folder placement
-                            video_path = self.error_handler.retry_with_backoff(
-                                download_youtube_video,
+                            # Enhanced video download with systematic tier-by-tier fallback
+                            video_path = self._download_video_with_quality_fallback(
                                 input_info['info']['url'],
-                                stage="video_acquisition",
-                                context="YouTube video download"
+                                expected_video_path
                             )
                             
                             if video_path and os.path.exists(video_path):
@@ -679,7 +662,7 @@ class MasterProcessor:
             
             # Use retry mechanism for file upload API call
             analysis_result = self.error_handler.retry_with_backoff(
-                analyze_with_gemini_file_upload,
+                analyze_with_gemini_file_upload,                
                 file_object,  # File object instead of transcript text
                 analysis_rules,
                 processing_folder,  # Add processing folder for prompt saving
@@ -689,44 +672,32 @@ class MasterProcessor:
             
             if not analysis_result:
                 raise ValueError("Analysis returned empty result")
-            
-            # Save analysis results
+              # Save analysis results using the improved save function from transcript_analyzer
             self.progress_tracker.update_stage_progress(90, "Saving analysis")
             
-            # Create the full analysis output with header
-            header = f"""TRANSCRIPT ANALYSIS REPORT
-Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}
-Session ID: {self.session_id}
-Source File: {os.path.basename(transcript_path)}
-Analysis Rules Used:
-{'-' * 40}
-{analysis_rules}
-{'-' * 40}
-
-ANALYSIS RESULTS:
-{'=' * 60}
-
-"""
+            # Use the improved save function that creates three files:
+            # 1. {base}_analysis_prompt.txt
+            # 2. {base}_analysis_results.json (clean JSON - needed for podcast generation)
+            # 3. {base}_analysis_combined.txt (human-readable report)
+            save_success = save_analysis_improved(analysis_result, analysis_path, transcript_path, analysis_rules)
             
-            full_output = header + analysis_result
+            if not save_success:
+                raise RuntimeError("Failed to save analysis using improved save function")
             
-            # Ensure the directory exists before saving
+            # Return path to the JSON results file (not the combined text file)
+            # Stage 6 needs the clean JSON format for podcast generation
+            transcript_base = os.path.splitext(os.path.basename(transcript_path))[0]
             analysis_dir = os.path.dirname(analysis_path)
-            if not os.path.exists(analysis_dir):
-                self.logger.info(f"Creating directory for analysis: {analysis_dir}")
-                os.makedirs(analysis_dir, exist_ok=True)
-            try:
-                with open(analysis_path, 'w', encoding='utf-8') as f:
-                    f.write(full_output)
-                self.logger.info(f"Analysis saved to: {analysis_path}")
-            except Exception as e:
-                raise RuntimeError(f"Failed to save analysis: {e}")
+            json_results_path = os.path.join(analysis_dir, f"{transcript_base}_analysis_results.json")
+            
+            self.logger.info(f"Master processor analysis saved using improved format: {analysis_path}")
+            self.logger.info(f"Returning JSON results path for Stage 6: {json_results_path}")
             
             self.progress_tracker.update_stage_progress(100, "Content analysis complete")
             self.progress_tracker.complete_stage(ProcessingStage.CONTENT_ANALYSIS)
             
-            self.logger.info(f"Content analysis successful: {analysis_path}")
-            return analysis_path
+            self.logger.info(f"Master processor content analysis successful: {json_results_path}")
+            return json_results_path
             
         except Exception as e:
             self.progress_tracker.fail_stage(ProcessingStage.CONTENT_ANALYSIS, str(e))
@@ -926,7 +897,6 @@ ANALYSIS RESULTS:
                 
                 self.progress_tracker.update_stage_progress(100, "Video clip extraction complete")
                 self.progress_tracker.complete_stage(ProcessingStage.VIDEO_CLIP_EXTRACTION)
-                
                 return output_dir
             else:
                 error_msg = extract_result.get('error', 'Unknown error') if extract_result else 'Extract function returned None'
@@ -937,92 +907,67 @@ ANALYSIS RESULTS:
             self.logger.error(f"Video clip extraction failed: {e}")
             return None
 
-    def _stage_9_video_timeline_building(self, podcast_script_path: str, audio_output_dir: str,
-                                        clips_output_dir: str, episode_title: str) -> Optional[str]:
-        """Stage 9: Build Video Timeline from Assets."""
-        self.progress_tracker.start_stage(ProcessingStage.VIDEO_TIMELINE_BUILDING, estimated_duration=30)
-        self.logger.info("Starting video timeline building")
-        
-        try:
-            if not clips_output_dir or not os.path.exists(clips_output_dir):
-                self.logger.warning("No video clips available for timeline building")
-                self.progress_tracker.complete_stage(ProcessingStage.VIDEO_TIMELINE_BUILDING)
-                return None
-            
-            # Initialize timeline builder
-            self.progress_tracker.update_stage_progress(10, "Initializing timeline builder")
-            timeline_builder = TimelineBuilder()
-            
-            # Build timeline from script and assets
-            self.progress_tracker.update_stage_progress(30, "Building video timeline")
-            
-            timeline_result = timeline_builder.build_timeline_from_script(
-                tts_script_path=podcast_script_path,
-                episode_title=episode_title,
-                audio_files_dir=audio_output_dir,
-                video_clips_dir=clips_output_dir
-            )
-            
-            if timeline_result and timeline_result.get('success', False):
-                timeline_path = timeline_result.get('timeline_path')
-                
-                self.progress_tracker.update_stage_progress(90, "Timeline building complete")
-                self.logger.info(f"Video timeline built successfully:")
-                self.logger.info(f"  Timeline File: {timeline_path}")
-                self.progress_tracker.update_stage_progress(100, "Video timeline building complete")
-                self.progress_tracker.complete_stage(ProcessingStage.VIDEO_TIMELINE_BUILDING)
-                
-                return timeline_path
-            else:
-                raise Exception("Timeline building failed")
-                
-        except Exception as e:
-            self.progress_tracker.fail_stage(ProcessingStage.VIDEO_TIMELINE_BUILDING, str(e))
-            self.logger.error(f"Video timeline building failed: {e}")
-            return None
+    # Legacy timeline building method - REMOVED because Video_Compilator handles timeline building internally
+    # def _stage_9_video_timeline_building(self, ...): pass
 
-    def _stage_9_final_video_assembly(self, timeline_path: str, episode_title: str) -> Optional[str]:
-        """Stage 9: Assemble Final Video from Timeline."""
+    def _stage_9_final_video_assembly(self, episode_dir: str, episode_title: str) -> Optional[str]:
+        """Stage 9: Assemble Final Video using Video_Compilator."""
         self.progress_tracker.start_stage(ProcessingStage.FINAL_VIDEO_ASSEMBLY, estimated_duration=300)
-        self.logger.info("Starting final video assembly")
+        self.logger.info("Starting final video assembly with Video_Compilator")
         
         try:
-            if not timeline_path or not os.path.exists(timeline_path):
-                self.logger.warning("No timeline available for video assembly")
-                self.progress_tracker.complete_stage(ProcessingStage.FINAL_VIDEO_ASSEMBLY)
-                return None
+            # Validate episode directory structure
+            self.progress_tracker.update_stage_progress(10, "Validating episode directory")
+            required_paths = {
+                'script': os.path.join(episode_dir, 'Input', 'unified_podcast_script.json'),
+                'audio_dir': os.path.join(episode_dir, 'Output', 'Audio'),
+                'clips_dir': os.path.join(episode_dir, 'Output', 'Video_Clips')
+            }
             
-            # Initialize video assembler
-            self.progress_tracker.update_stage_progress(10, "Initializing video assembler")
-            video_assembler = VideoAssembler()
+            for name, path in required_paths.items():
+                if not os.path.exists(path):
+                    raise FileNotFoundError(f"Required {name} not found: {path}")
             
-            # Assemble final video
-            self.progress_tracker.update_stage_progress(20, "Assembling final video")
-            
-            assembly_result = video_assembler.assemble_video_from_timeline(
-                timeline_path=timeline_path,
-                episode_title=episode_title,
-                video_settings=self.config.get('video', {}).get('final_assembly', {})
+            # Initialize Video_Compilator
+            self.progress_tracker.update_stage_progress(20, "Initializing Video_Compilator")
+            compiler = SimpleCompiler(
+                keep_temp_files=True,  # Keep for debugging
+                validate_segments=True  # Validate before compilation
             )
             
-            if assembly_result and assembly_result.get('success', False):
-                final_video_path = assembly_result.get('output_video_path')
-                file_size = os.path.getsize(final_video_path) / (1024 * 1024 * 1024)  # GB
+            # Generate output filename
+            output_filename = f"{episode_title}_compiled.mp4"
+            
+            # Compile the episode
+            self.progress_tracker.update_stage_progress(30, "Compiling final video")
+            compilation_result = compiler.compile_episode(
+                episode_path=Path(episode_dir),
+                output_filename=output_filename
+            )
+            
+            if compilation_result.success:
+                final_video_path = str(compilation_result.output_path)
+                file_size_gb = compilation_result.file_size / (1024 * 1024 * 1024) if compilation_result.file_size else 0
                 
-                self.progress_tracker.update_stage_progress(90, "Video assembly complete")
+                self.progress_tracker.update_stage_progress(90, "Video compilation complete")
                 self.logger.info(f"Final video assembled successfully:")
                 self.logger.info(f"  Final Video: {final_video_path}")
-                self.logger.info(f"  File Size: {file_size:.2f} GB")
+                self.logger.info(f"  Duration: {compilation_result.duration:.2f}s")
+                self.logger.info(f"  File Size: {file_size_gb:.2f} GB")
+                self.logger.info(f"  Segments: {compilation_result.segments_processed}")
+                self.logger.info(f"  Audio Converted: {compilation_result.audio_segments_converted}")
                 
                 self.progress_tracker.update_stage_progress(100, "Final video assembly complete")
                 self.progress_tracker.complete_stage(ProcessingStage.FINAL_VIDEO_ASSEMBLY)
                 
                 return final_video_path
             else:
-                raise Exception("Video assembly failed")
+                error_msg = compilation_result.error or "Unknown compilation error"
+                raise Exception(f"Video compilation failed: {error_msg}")
+                
         except Exception as e:
             self.progress_tracker.fail_stage(ProcessingStage.FINAL_VIDEO_ASSEMBLY, str(e))
-            self.logger.error(f"Final video assembly failed: {e}")            
+            self.logger.error(f"Final video assembly failed: {e}")
             return None
     
     def process_single_input(self, input_str: str, analysis_rules_file: Optional[str] = None, 
@@ -1095,7 +1040,7 @@ ANALYSIS RESULTS:
                     final_results['podcast_script_path'] = podcast_script_path
                     
                     # Stage 7: Audio Generation (Optional, requires podcast script)
-                    if generate_audio:
+                    if generate_audio:                        
                         audio_output_dir = self._stage_7_audio_generation(
                             podcast_script_path,
                             episode_title
@@ -1113,22 +1058,14 @@ ANALYSIS RESULTS:
                                 if clips_output_dir:
                                     final_results['video_clips_path'] = clips_output_dir
                                     
-                                    # Stage 9: Video Timeline Building
-                                    timeline_path = self._stage_9_video_timeline_building(
-                                        podcast_script_path,
-                                        audio_output_dir,
-                                        clips_output_dir,
+                                    # Stage 9: Final Video Assembly (Timeline building now handled by Video_Compilator)
+                                    episode_dir = os.path.dirname(os.path.dirname(podcast_script_path))  # Get episode root
+                                    final_video_path = self._stage_9_final_video_assembly(
+                                        episode_dir,
                                         episode_title
                                     )
-                                    if timeline_path:
-                                        final_results['timeline_path'] = timeline_path
-                                          # Stage 9: Final Video Assembly
-                                        final_video_path = self._stage_9_final_video_assembly(
-                                            timeline_path,
-                                            episode_title
-                                        )
-                                        if final_video_path:
-                                            final_results['final_video_path'] = final_video_path
+                                    if final_video_path:
+                                        final_results['final_video_path'] = final_video_path
                             elif generate_video and not video_path:
                                 self.logger.warning("Video generation requested but no video file available")
               # Create processing metadata summary after all stages complete
@@ -1206,6 +1143,143 @@ ANALYSIS RESULTS:
         progress_display = self.progress_tracker.get_progress_display(self.current_input)
         print(f"\r{progress_display}", end="", flush=True)
   
+    
+    def _download_video_with_quality_fallback(self, url: str, output_path: str) -> Optional[str]:
+        """Enhanced video download with systematic tier-by-tier fallback.
+        
+        Implements the comprehensive format testing strategy from our empirical analysis.
+        Based on testing 39 different methods with 51.3% overall success rate.
+        """
+        # Define quality tiers based on our comprehensive testing
+        quality_tiers = [
+            # Tier 1: Maximum Quality (4K, unrestricted best)
+            {
+                'name': 'Maximum Quality',
+                'formats': [
+                    'best',                                    # Best available quality
+                    'bestvideo+bestaudio',                     # Best video + best audio
+                    'bestvideo+bestaudio/best',               # Combined with single file fallback
+                ]
+            },
+            
+            # Tier 2: High Quality (1080p optimized)
+            {
+                'name': 'High Quality (1080p)',
+                'formats': [
+                    'best[height<=1080]',                     # Best up to 1080p
+                    'bestvideo[height<=1080]+bestaudio',      # Best 1080p video + audio
+                    '270+233',                                # 1080p HLS + audio
+                    '137+140',                                # 1080p video + 128k audio
+                    'best[ext=mp4]',                          # Best MP4 format
+                    'best[vcodec^=avc]',                      # Best H.264 video
+                ]
+            },
+            
+            # Tier 3: Good Quality (720p reliable)
+            {
+                'name': 'Good Quality (720p)',
+                'formats': [
+                    'best[height<=720]',                      # Best up to 720p
+                    'bestvideo[height<=720]+bestaudio',       # Best 720p video + audio
+                    '232+233',                                # 720p HLS + audio
+                    '136+140',                                # 720p video + 128k audio
+                    '22',                                     # 720p MP4 (format 22)
+                    'best[acodec^=mp4a]',                     # Best AAC audio
+                ]
+            },
+            
+            # Tier 4: Fallback Quality (480p and below)
+            {
+                'name': 'Fallback Quality',
+                'formats': [
+                    'best[height<=480]',                      # Best up to 480p
+                    '18',                                     # 360p MP4 (format 18)
+                    'worst',                                  # Worst available quality
+                    'best/worst',                             # Best with worst fallback
+                ]
+            },
+            
+            # Tier 5: Protocol-specific fallbacks
+            {
+                'name': 'Protocol Fallbacks',
+                'formats': [
+                    'best[protocol^=https]',                  # HTTPS protocols only
+                    'best[protocol^=m3u8]',                   # HLS streams only
+                ]
+            }
+        ]
+        
+        self.logger.info(f"Starting systematic video download with quality fallback for: {url}")
+        
+        for tier_num, tier in enumerate(quality_tiers, 1):
+            tier_name = tier['name']
+            self.logger.info(f"🎯 Attempting Tier {tier_num}: {tier_name}")
+            
+            for format_num, format_spec in enumerate(tier['formats'], 1):
+                try:
+                    self.logger.info(f"   📡 Trying format {format_num}/{len(tier['formats'])}: '{format_spec}'")
+                    
+                    # Progress update for each tier
+                    progress = 50 + (tier_num - 1) * 5  # 50-70% range for video download attempts
+                    self.progress_tracker.update_stage_progress(
+                        progress, 
+                        f"Tier {tier_num}: {format_spec}"
+                    )
+                    
+                    # Build yt-dlp command
+                    command = [
+                        'yt-dlp',
+                        '-f', format_spec,
+                        '-o', output_path,
+                        '--merge-output-format', 'mp4',
+                        '--no-warnings',
+                        '--extractor-retries', '3',
+                        '--fragment-retries', '3',
+                        url
+                    ]
+                    
+                    # Execute download
+                    result = subprocess.run(
+                        command, 
+                        check=True, 
+                        capture_output=True, 
+                        text=True,
+                        timeout=300  # 5 minute timeout per attempt
+                    )
+                    
+                    # Verify file was created
+                    if os.path.exists(output_path):
+                        file_size = os.path.getsize(output_path)
+                        self.logger.info(f"✅ SUCCESS: Tier {tier_num} format '{format_spec}'")
+                        self.logger.info(f"   📁 File: {output_path}")
+                        self.logger.info(f"   📊 Size: {file_size / (1024*1024):.1f} MB")
+                        return output_path
+                    else:
+                        raise Exception("File was not created despite successful command")
+                        
+                except subprocess.TimeoutExpired:
+                    error_msg = f"Timeout (300s) exceeded"
+                    self.logger.warning(f"❌ TIMEOUT: Tier {tier_num} format '{format_spec}' - {error_msg}")
+                    continue
+                    
+                except subprocess.CalledProcessError as e:
+                    error_output = e.stderr if e.stderr else e.stdout
+                    # Truncate long error messages
+                    error_summary = error_output[:200] + "..." if len(error_output) > 200 else error_output
+                    self.logger.warning(f"❌ FAILED: Tier {tier_num} format '{format_spec}' - {error_summary}")
+                    continue
+                    
+                except Exception as e:
+                    self.logger.warning(f"❌ ERROR: Tier {tier_num} format '{format_spec}' - {str(e)}")
+                    continue
+            
+            # Log tier completion
+            self.logger.info(f"🔸 Tier {tier_num} ({tier_name}) - All formats failed")
+        
+        # If we get here, all tiers failed
+        error_msg = f"All {len(quality_tiers)} quality tiers failed for video download"
+        self.logger.error(f"💥 COMPLETE FAILURE: {error_msg}")
+        raise Exception(error_msg)
     
 def create_argument_parser() -> argparse.ArgumentParser:
     """Create and configure the argument parser."""

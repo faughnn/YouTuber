@@ -1,0 +1,425 @@
+[
+  {
+    "timestamp": "2025-06-09T21:59:45.256862",
+    "test_name": "Video Availability Check",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "title": "Joe Rogan Experience #2334 - Kash Patel"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T21:59:48.531060",
+    "test_name": "Format Listing",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "format_count": 20
+    }
+  },
+  {
+    "timestamp": "2025-06-09T21:59:51.851114",
+    "test_name": "Format: best",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "Best available quality",
+      "format": "best"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T21:59:55.117243",
+    "test_name": "Format: worst",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "Worst available quality",
+      "format": "worst"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T21:59:59.077163",
+    "test_name": "Format: best[height<=1080]",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "description": "Best up to 1080p",
+      "format": "best[height<=1080]"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:02.311541",
+    "test_name": "Format: best[height<=720]",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "Best up to 720p",
+      "format": "best[height<=720]"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:05.419333",
+    "test_name": "Format: best[height<=480]",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "Best up to 480p",
+      "format": "best[height<=480]"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:09.294473",
+    "test_name": "Format: bestvideo+bestaudio",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "description": "Best video + best audio",
+      "format": "bestvideo+bestaudio"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:13.007147",
+    "test_name": "Format: bestvideo[height<=1080]+bestaudio",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "description": "Best 1080p video + audio",
+      "format": "bestvideo[height<=1080]+bestaudio"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:16.666400",
+    "test_name": "Format: bestvideo[height<=720]+bestaudio",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "description": "Best 720p video + audio",
+      "format": "bestvideo[height<=720]+bestaudio"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:21.356332",
+    "test_name": "Format: best[ext=mp4]",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "Best MP4 format",
+      "format": "best[ext=mp4]"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:24.482252",
+    "test_name": "Format: best[vcodec^=avc]",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "Best H.264 video",
+      "format": "best[vcodec^=avc]"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:27.916197",
+    "test_name": "Format: best[acodec^=mp4a]",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "Best AAC audio",
+      "format": "best[acodec^=mp4a]"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:31.101420",
+    "test_name": "Format: 18",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "360p MP4 (format 18)",
+      "format": "18"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:34.423557",
+    "test_name": "Format: 22",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "720p MP4 (format 22)",
+      "format": "22"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:37.687209",
+    "test_name": "Format: 136+140",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "720p video + 128k audio",
+      "format": "136+140"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:40.832602",
+    "test_name": "Format: 137+140",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "1080p video + 128k audio",
+      "format": "137+140"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:44.819439",
+    "test_name": "Format: 232+233",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "description": "720p HLS + audio",
+      "format": "232+233"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:48.682355",
+    "test_name": "Format: 270+233",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "description": "1080p HLS + audio",
+      "format": "270+233"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:51.788538",
+    "test_name": "Format: best[protocol^=https]",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "HTTPS protocols only",
+      "format": "best[protocol^=https]"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:56.499796",
+    "test_name": "Format: best[protocol^=m3u8]",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "HLS streams only",
+      "format": "best[protocol^=m3u8]"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:00:59.816211",
+    "test_name": "Format: best/worst",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "description": "Best with worst fallback",
+      "format": "best/worst"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:03.796637",
+    "test_name": "Format: bestvideo+bestaudio/best",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "description": "Combined with single file fallback",
+      "format": "bestvideo+bestaudio/best"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:06.917728",
+    "test_name": "Extraction: Default extraction",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "method": "Default extraction",
+      "title": "Joe Rogan Experience #2334 - Kash Patel"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:09.148610",
+    "test_name": "Extraction: Web client",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "method": "Web client",
+      "title": null
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:11.220428",
+    "test_name": "Extraction: Android client",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "method": "Android client",
+      "title": "Joe Rogan Experience #2334 - Kash Patel"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:13.573789",
+    "test_name": "Extraction: iOS client",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "method": "iOS client",
+      "title": "Joe Rogan Experience #2334 - Kash Patel"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:16.845572",
+    "test_name": "Extraction: Mobile web client",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "method": "Mobile web client",
+      "title": null
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:21.300599",
+    "test_name": "Extraction: Skip DASH",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "method": "Skip DASH",
+      "title": "Joe Rogan Experience #2334 - Kash Patel"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:24.411993",
+    "test_name": "Extraction: Skip HLS",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "ERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "method": "Skip HLS",
+      "title": null
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:27.748086",
+    "test_name": "Extraction: Skip DASH manifest",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "method": "Skip DASH manifest",
+      "title": "Joe Rogan Experience #2334 - Kash Patel"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:30.699418",
+    "test_name": "Extraction: Skip certificate check",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "method": "Skip certificate check",
+      "title": "Joe Rogan Experience #2334 - Kash Patel"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:33.853744",
+    "test_name": "Extraction: 30s socket timeout",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "method": "30s socket timeout",
+      "title": "Joe Rogan Experience #2334 - Kash Patel"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:37.236688",
+    "test_name": "Extraction: Desktop user agent",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "method": "Desktop user agent",
+      "title": "Joe Rogan Experience #2334 - Kash Patel"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:41.001951",
+    "test_name": "Extraction: iPhone user agent",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "method": "iPhone user agent",
+      "title": "Joe Rogan Experience #2334 - Kash Patel"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:44.055603",
+    "test_name": "Download: Basic 480p download",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "WARNING: [youtube] Falling back to generic n function search\n         player = https://www.youtube.com/s/player/fc2a56a5/player_ias.vflset/en_US/base.js\nWARNING: [youtube] C81bFx8CSA8: nsig extraction failed: Some formats may be missing\n         n = RBJlk_h3XKc3X6o ; player = https://www.youtube.com/s/player/fc2a56a5/player_ias.vflset/en_US/base.js\n         Please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U\nWARNING: [youtube] C81bFx8CSA8: nsig extraction failed: Some formats may be missing\n         n = O_gMMNZrxX4s5yM ; player = https://www.youtube.com/s/player/fc2a56a5/player_ias.vflset/en_US/base.js\n         Please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U\nWARNING: [youtube] C81bFx8CSA8: nsig extraction failed: Some formats may be missing\n         n = QNvyxLojEFKIgfh ; player = https://www.youtube.com/s/player/fc2a56a5/player_ias.vflset/en_US/base.js\n         Please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U\nWARNING: [youtube] C81bFx8CSA8: Some web client https formats have been skipped as they are missing a url. YouTube is forcing SABR streaming for this client. See  https://github.com/yt-dlp/yt-dlp/issues/12482  for more details\nERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "strategy": "Basic 480p download"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:47.788888",
+    "test_name": "Download: HLS merge download",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "strategy": "HLS merge download"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:51.378874",
+    "test_name": "Download: Audio extraction",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": true,
+    "error_msg": "",
+    "details": {
+      "strategy": "Audio extraction"
+    }
+  },
+  {
+    "timestamp": "2025-06-09T22:01:54.668816",
+    "test_name": "Download: Download with retries",
+    "url": "https://www.youtube.com/watch?v=C81bFx8CSA8",
+    "success": false,
+    "error_msg": "WARNING: [youtube] Falling back to generic n function search\n         player = https://www.youtube.com/s/player/fc2a56a5/player_ias.vflset/en_US/base.js\nWARNING: [youtube] C81bFx8CSA8: nsig extraction failed: Some formats may be missing\n         n = Ilu4mD5QLEg5Y9T ; player = https://www.youtube.com/s/player/fc2a56a5/player_ias.vflset/en_US/base.js\n         Please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U\nWARNING: [youtube] C81bFx8CSA8: nsig extraction failed: Some formats may be missing\n         n = tF8KdT6saTnQcwA ; player = https://www.youtube.com/s/player/fc2a56a5/player_ias.vflset/en_US/base.js\n         Please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U\nWARNING: [youtube] C81bFx8CSA8: nsig extraction failed: Some formats may be missing\n         n = XT0XxhHazFJjd9U ; player = https://www.youtube.com/s/player/fc2a56a5/player_ias.vflset/en_US/base.js\n         Please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U\nWARNING: [youtube] C81bFx8CSA8: Some web client https formats have been skipped as they are missing a url. YouTube is forcing SABR streaming for this client. See  https://github.com/yt-dlp/yt-dlp/issues/12482  for more details\nERROR: [youtube] C81bFx8CSA8: Requested format is not available. Use --list-formats for a list of available formats\n",
+    "details": {
+      "strategy": "Download with retries"
+    }
+  }
+]

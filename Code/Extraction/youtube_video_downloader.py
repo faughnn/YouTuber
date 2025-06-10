@@ -69,26 +69,101 @@ def download_video(video_url_or_id, file_organizer=None):
         
         # Create the Input folder if it doesn't exist
         os.makedirs(episode_input_folder, exist_ok=True)
-        
-        # Use standardized filename
+          # Use standardized filename
         output_filename = "original_video.mp4"
         output_path = os.path.join(episode_input_folder, output_filename)
 
         print(f"Downloading video for: {video_title}")
         print(f"Output will be saved to: {output_path}")
-          # Command to download video, preferring MP4 format.
-        # -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best': 
-        #   Selects best MP4 video and M4A audio, or best MP4 overall, or best available.
-        #   yt-dlp will attempt to mux these into an MP4 container specified by -o.
-        command = [
-            'yt-dlp',
-            '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-            '-o', output_path, # Output template with .mp4 extension
-            '--no-warnings',
-            normalized_url
+          # Comprehensive format selection strategies organized by quality tiers
+        # Based on systematic testing of 39 different methods
+        quality_tiers = [
+            # Tier 1: Maximum Quality (4K, unrestricted best)
+            [
+                "best",                                    # Best available quality
+                "bestvideo+bestaudio",                     # Best video + best audio
+                "bestvideo+bestaudio/best",               # Combined with single file fallback
+            ],
+            
+            # Tier 2: High Quality (1080p optimized)
+            [
+                "best[height<=1080]",                     # Best up to 1080p
+                "bestvideo[height<=1080]+bestaudio",      # Best 1080p video + audio
+                "270+233",                                # 1080p HLS + audio
+                "137+140",                                # 1080p video + 128k audio
+                "best[ext=mp4]",                          # Best MP4 format
+                "best[vcodec^=avc]",                      # Best H.264 video
+            ],
+            
+            # Tier 3: Good Quality (720p reliable)
+            [
+                "best[height<=720]",                      # Best up to 720p
+                "bestvideo[height<=720]+bestaudio",       # Best 720p video + audio
+                "232+233",                                # 720p HLS + audio
+                "136+140",                                # 720p video + 128k audio
+                "22",                                     # 720p MP4 (format 22)
+                "best[acodec^=mp4a]",                     # Best AAC audio
+            ],
+            
+            # Tier 4: Fallback Quality (480p and below)
+            [
+                "best[height<=480]",                      # Best up to 480p
+                "18",                                     # 360p MP4 (format 18)
+                "worst",                                  # Worst available quality
+                "best/worst",                             # Best with worst fallback
+            ],
+            
+            # Tier 5: Protocol-specific fallbacks
+            [
+                "best[protocol^=https]",                  # HTTPS protocols only
+                "best[protocol^=m3u8]",                   # HLS streams only
+            ]
         ]
         
-        subprocess.run(command, check=True)
+        # Flatten tiers into single list for backward compatibility
+        format_options = []
+        for tier in quality_tiers:
+            format_options.extend(tier)
+        
+        download_success = False
+        last_error = None
+        
+        for i, format_selector in enumerate(format_options):
+            try:
+                print(f"Attempting download with format option {i+1}: {format_selector}")
+                
+                command = [
+                    'yt-dlp',
+                    '-f', format_selector,
+                    '-o', output_path,
+                    '--merge-output-format', 'mp4',  # Ensure output is MP4
+                    '--no-warnings',
+                    '--extractor-retries', '3',
+                    '--fragment-retries', '3',
+                    normalized_url
+                ]
+                
+                subprocess.run(command, check=True, capture_output=True, text=True)
+                
+                if os.path.exists(output_path):
+                    download_success = True
+                    print(f"Video downloaded successfully with format option {i+1}")
+                    break
+                    
+            except subprocess.CalledProcessError as e:
+                last_error = e
+                error_output = e.stderr if e.stderr else e.stdout
+                print(f"Format option {i+1} failed: {error_output}")
+                if i < len(format_options) - 1:
+                    print("Trying next format option...")
+                continue
+        
+        if not download_success:
+            if last_error:
+                error_output = last_error.stderr if last_error.stderr else last_error.stdout
+                raise subprocess.CalledProcessError(last_error.returncode, last_error.cmd, error_output)
+            else:
+                raise Exception("All format options failed")
 
         if os.path.exists(output_path):
             print(f"Video downloaded successfully: {output_path}")

@@ -627,8 +627,7 @@ ANALYSIS RULES:
 {analysis_rules}
 
 The transcript file contains a JSON structure with segments. Analyze the transcript content according to the rules above and return only valid JSON without any markdown formatting or explanations.
-
-Begin JSON output now:"""
+"""
 
     logger.info(f"File-based prompt created: {len(prompt)} characters")
     return prompt
