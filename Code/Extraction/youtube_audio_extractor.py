@@ -17,7 +17,12 @@ import os
 # Import FileOrganizer for consistent path management
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from Utils.file_organizer import FileOrganizer
-from .youtube_url_utils import YouTubeUrlUtils
+
+# Handle both relative and absolute imports
+try:
+    from .youtube_url_utils import YouTubeUrlUtils
+except ImportError:
+    from youtube_url_utils import YouTubeUrlUtils
 import yaml
 
 def get_episode_input_folder(episode_title):

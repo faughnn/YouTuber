@@ -369,6 +369,8 @@ class SimpleCompiler:
             final_dir = episode_path / "Output" / "Video" / "Final"
             final_dir.mkdir(parents=True, exist_ok=True)
             output_path = final_dir / output_filename
+              # Create debugging file with clip order before concatenation
+            self._create_clip_order_debug_file(final_dir, output_filename, segments, sequence, converted_audio_videos)
             
             self.logger.info(f"Starting concatenation of {len(sequence)} segments...")
             concat_result = self.concatenator.concatenate_mixed_segments(sequence, output_path)
@@ -394,13 +396,113 @@ class SimpleCompiler:
                     success=False,
                     error=concat_result.error,
                     segments_processed=len(sequence),
-                    audio_segments_converted=len(converted_audio_videos)
-                )
+                    audio_segments_converted=len(converted_audio_videos)                )
             
         except Exception as e:
             error_msg = f"Compilation failed: {str(e)}"
             self.logger.error(error_msg)
             return CompilationResult(success=False, error=error_msg)
+
+    def _create_clip_order_debug_file(self, final_dir: Path, output_filename: str, segments: List[SegmentInfo], 
+                                     sequence: List[Path], converted_audio_videos: Dict[str, Path]) -> None:
+        """Create a text file documenting the order of clips in the final video for debugging purposes.
+        
+        Args:
+            final_dir: Directory where the final video will be saved
+            output_filename: Name of the output video file
+            segments: Original segment information
+            sequence: Final sequence of video files to be concatenated
+            converted_audio_videos: Mapping of audio segment IDs to converted video paths
+        """
+        import datetime
+        
+        # Create debug filename based on output video name
+        debug_filename = output_filename.replace('.mp4', '_clip_order.txt')
+        debug_path = final_dir / debug_filename
+        
+        try:
+            with open(debug_path, 'w', encoding='utf-8') as f:
+                f.write("=" * 80 + "\n")
+                f.write("FINAL VIDEO CLIP ORDER DEBUG FILE\n")
+                f.write("=" * 80 + "\n")
+                f.write(f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Video File: {output_filename}\n")
+                f.write(f"Total Segments: {len(sequence)}\n")
+                f.write(f"Audio Segments Converted: {len(converted_audio_videos)}\n")
+                f.write(f"Video Segments: {len([s for s in segments if s.segment_type == 'video'])}\n")
+                f.write("\n")
+                
+                f.write("SEGMENT ORDER IN FINAL VIDEO:\n")
+                f.write("-" * 50 + "\n")
+                
+                for i, video_path in enumerate(sequence, 1):
+                    # Find the corresponding segment info
+                    segment_info = None
+                    segment_type = None
+                    segment_id = None
+                    original_file = None
+                    
+                    # Check if this is a converted audio file
+                    for seg_id, converted_path in converted_audio_videos.items():
+                        if converted_path == video_path:
+                            segment_type = "AUDIO→VIDEO"
+                            segment_id = seg_id
+                            # Find original audio file
+                            for seg in segments:
+                                if seg.segment_id == seg_id:
+                                    original_file = seg.file_path.name
+                                    segment_info = seg
+                                    break
+                            break
+                    
+                    # If not converted audio, check if it's an original video
+                    if segment_type is None:
+                        for seg in segments:
+                            if seg.file_path == video_path:
+                                segment_type = "ORIGINAL VIDEO"
+                                segment_id = seg.segment_id
+                                original_file = seg.file_path.name
+                                segment_info = seg
+                                break
+                    
+                    # If still not found, it's an unknown file
+                    if segment_type is None:
+                        segment_type = "UNKNOWN"
+                        segment_id = "unknown"
+                        original_file = video_path.name
+                    
+                    f.write(f"{i:2d}. [{segment_type:15}] {segment_id}\n")
+                    f.write(f"    Original: {original_file}\n")
+                    f.write(f"    Final:    {video_path.name}\n")
+                    
+                    # Add metadata if available
+                    if segment_info and segment_info.metadata:
+                        metadata = segment_info.metadata
+                        if 'start_time' in metadata or 'duration' in metadata:
+                            f.write(f"    Timing:   ")
+                            if 'start_time' in metadata:
+                                f.write(f"Start: {metadata['start_time']}")
+                            if 'duration' in metadata:
+                                f.write(f", Duration: {metadata['duration']}")
+                            f.write("\n")
+                    f.write("\n")
+                
+                f.write("-" * 50 + "\n")
+                f.write("FILE PATHS:\n")
+                f.write("-" * 50 + "\n")
+                
+                for i, video_path in enumerate(sequence, 1):
+                    f.write(f"{i:2d}. {video_path}\n")
+                
+                f.write("\n")
+                f.write("=" * 80 + "\n")
+                f.write("END OF DEBUG FILE\n")
+                f.write("=" * 80 + "\n")
+            
+            self.logger.info(f"Created clip order debug file: {debug_filename}")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to create debug file: {e}")
 
 
 def main():

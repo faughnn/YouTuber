@@ -587,15 +587,48 @@ def upload_transcript_to_gemini(transcript_path, display_name):
             raise ValueError(f"File too large: {file_size} bytes (max 2GB)")
         
         logger.info(f"Uploading file: {file_size} bytes")
-        
-        # Validate JSON structure before upload
+          # Validate JSON structure before upload with double-encoding repair
         try:
             with open(transcript_path, 'r', encoding='utf-8') as f:
                 transcript_data = json.load(f)
                 if not transcript_data.get('segments'):
                     raise ValueError("Invalid transcript format: no segments found")
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON format: {e}")
+            # Try to repair double-encoded JSON (common issue from master_processor_v2.py Stage 2)
+            logger.warning(f"Initial JSON parsing failed: {e}")
+            logger.info("Attempting to repair potentially double-encoded JSON...")
+            
+            try:
+                with open(transcript_path, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                
+                # Check if the content is a JSON string (starts and ends with quotes)
+                if content.startswith('"') and content.endswith('"'):
+                    logger.info("Detected double-encoded JSON - attempting repair")
+                    
+                    # First parse: convert JSON string to actual string
+                    json_string = json.loads(content)
+                    
+                    # Second parse: convert string to JSON object
+                    transcript_data = json.loads(json_string)
+                    
+                    # Validate the repaired data
+                    if not transcript_data.get('segments'):
+                        raise ValueError("Repaired transcript format invalid: no segments found")
+                    
+                    # Save the repaired JSON back to the file
+                    logger.info("Repairing transcript file with properly formatted JSON...")
+                    with open(transcript_path, 'w', encoding='utf-8') as f:
+                        json.dump(transcript_data, f, indent=2, ensure_ascii=False)
+                    
+                    logger.info("✅ Successfully repaired double-encoded JSON transcript")
+                else:
+                    # Not double-encoded, re-raise original error
+                    raise ValueError(f"Invalid JSON format: {e}")
+                    
+            except (json.JSONDecodeError, ValueError) as repair_error:
+                logger.error(f"Failed to repair JSON: {repair_error}")
+                raise ValueError(f"Invalid JSON format - original error: {e}, repair failed: {repair_error}")
           # Upload file to Gemini using the correct API
         logger.info(f"Uploading to Gemini with display name: {display_name}")
           # Perform the upload - use text/plain MIME type to avoid analysis errors
