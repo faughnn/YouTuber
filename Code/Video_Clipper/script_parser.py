@@ -105,7 +105,7 @@ class UnifiedScriptParser:
                 try:
                     clip_spec = self._parse_video_clip_section(section)
                     if self.validate_clip_data(clip_spec):
-                        video_clips.append(clip_spec)
+                        video_clips.append(clip_spec)                    
                     else:
                         self.logger.warning(f"Invalid clip data for section: {section.get('section_id', 'unknown')}")
                 except Exception as e:
@@ -116,24 +116,80 @@ class UnifiedScriptParser:
     
     def _parse_video_clip_section(self, section: Dict) -> VideoClipSpec:
         """Parse a single video clip section into VideoClipSpec"""
-        required_fields = ['section_id', 'clip_id', 'start_time', 'end_time', 'title']
-        
-        # Check for required fields
-        for field in required_fields:
+        # Check for basic required fields
+        basic_required_fields = ['section_id', 'clip_id', 'title']
+        for field in basic_required_fields:
             if field not in section:
                 raise ValueError(f"Missing required field: {field}")
+        
+        # Determine start_time and end_time
+        start_time, end_time = self._extract_clip_times(section)
         
         return VideoClipSpec(
             section_id=section['section_id'],
             clip_id=section['clip_id'],
-            start_time=section['start_time'],
-            end_time=section['end_time'],
+            start_time=start_time,
+            end_time=end_time,
             title=section['title'],
             severity_level=section.get('severity_level', 'MEDIUM'),
             estimated_duration=section.get('estimated_duration', 'Unknown'),
             selection_reason=section.get('selection_reason'),
             key_claims=section.get('key_claims', [])
         )
+    
+    def _extract_clip_times(self, section: Dict) -> tuple[str, str]:
+        """
+        Extract start and end times from a video clip section.
+        
+        Priority order:
+        1. If start_time and end_time are explicitly provided, use them
+        2. If suggestedClip array exists, calculate from timestamps
+        3. Otherwise, raise an error
+        
+        Args:
+            section: Video clip section dictionary
+            
+        Returns:
+            Tuple of (start_time, end_time) as strings
+            
+        Raises:
+            ValueError: If neither explicit times nor suggestedClip are available
+        """
+        # Option 1: Explicit start_time and end_time
+        if 'start_time' in section and 'end_time' in section:
+            return section['start_time'], section['end_time']
+        
+        # Option 2: Calculate from suggestedClip array
+        if 'suggestedClip' in section:
+            suggested_clip = section['suggestedClip']
+            if not isinstance(suggested_clip, list) or not suggested_clip:
+                raise ValueError("suggestedClip must be a non-empty list")
+            
+            # Extract all timestamps
+            timestamps = []
+            for i, clip_entry in enumerate(suggested_clip):
+                if not isinstance(clip_entry, dict):
+                    raise ValueError(f"suggestedClip entry {i} must be a dictionary")
+                if 'timestamp' not in clip_entry:
+                    raise ValueError(f"suggestedClip entry {i} missing 'timestamp' field")
+                
+                timestamp_str = str(clip_entry['timestamp'])
+                try:
+                    # Convert to float for comparison
+                    timestamp_float = float(timestamp_str)
+                    timestamps.append((timestamp_float, timestamp_str))
+                except ValueError:
+                    raise ValueError(f"Invalid timestamp format in suggestedClip entry {i}: {timestamp_str}")
+            
+            # Find min and max timestamps
+            min_timestamp = min(timestamps, key=lambda x: x[0])
+            max_timestamp = max(timestamps, key=lambda x: x[0])
+            
+            self.logger.info(f"Calculated clip times from suggestedClip: {min_timestamp[1]} to {max_timestamp[1]}")
+            return min_timestamp[1], max_timestamp[1]
+        
+        # Option 3: Neither available
+        raise ValueError("Section must have either explicit start_time/end_time or suggestedClip array")
     
     def validate_clip_data(self, clip_spec: VideoClipSpec) -> bool:
         """
@@ -175,6 +231,8 @@ class UnifiedScriptParser:
         - MM:SS.MS (03:55.06)
         - H:MM:SS (1:03:55)
         - MM:SS (03:55)
+        - Decimal seconds (64.821, 3846.508)
+        - Integer seconds (64, 3846)
         
         Args:
             timestamp: Timestamp string to parse
@@ -190,6 +248,13 @@ class UnifiedScriptParser:
         
         # Remove any whitespace
         timestamp = timestamp.strip()
+        
+        # Check for decimal seconds format first (64.821, 3846.508)
+        try:
+            # If it's a simple number (integer or float), convert directly
+            return float(timestamp)
+        except ValueError:
+            pass
         
         # Pattern for H:MM:SS.MS or MM:SS.MS format
         pattern_with_ms = r'^(?:(\d+):)?(\d{1,2}):(\d{1,2})\.(\d+)$'

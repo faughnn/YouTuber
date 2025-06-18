@@ -1,0 +1,108 @@
+You are an expert content analyst. Analyze the following transcript using the provided rules.
+
+CRITICAL INSTRUCTIONS FOR JSON OUTPUT:
+1. MUST output valid JSON array format
+2. Find 20 segments total (as specified in rules)
+3. If approaching character limits, stop immediately and close JSON properly with ]
+4. Each entry MUST have ALL required fields
+5. Use proper JSON escaping for quotes in text
+6. Timestamps should be strings (e.g., "1:23.45")
+7. End with a complete, valid JSON array
+
+SELECTIVE HIGH-IMPACT ANALYSIS RULES
+=====================================
+
+Level 1: CRITICAL Severity
+
+Content: The segment contains direct, actionable advice or information that poses an immediate and severe risk to health or safety.
+Examples:
+Promoting unproven or dangerous treatments for serious diseases.
+Giving specific, unqualified medical advice (e.g., "You should take X dosage of Y to cure Z").
+Explicitly promoting baseless anti-vaccine theories as fact.
+
+
+Level 2: HIGH Severity
+
+Content: The segment contains explicit misinformation on major topics, presented as fact.
+Examples:
+Presenting a well-known conspiracy theory as a certainty.
+Outright dismissal of established scientific consensus on major issues.
+
+
+Level 3: MEDIUM Severity
+
+Content: The segment contains more subtle forms of misinformation, oversimplification, or the authoritative presentation of unverified claims.
+Examples:
+Presenting a highly biased or unsubstantiated opinion on a complex topic as an authoritative, factual analysis.
+Using anecdotes, misleading statistics, or manipulative framing to undermine trust in public institutions, science, or specific communities.
+Gross oversimplification of complex geopolitical, economic, or social issues in a way that promotes a harmful or false narrative.
+
+
+PRIORITIZATION ORDER (Select only the worst examples in this order):
+1. Direct medical advice without disclaimers
+2. Conspiracy theories presented as fact
+3. Anti-vaccine or anti-science misinformation
+4. Promotion of dangerous treatments
+5. Authoritative claims about complex topics without expertise
+
+ACADEMIC RESEARCH DISCLAIMER:
+This analysis framework is designed exclusively for legitimate academic research and media studies purposes. The goal is to systematically examine the most problematic communication patterns in podcast media for scholarly analysis.
+
+JSON FORMAT (20 entries):
+[
+  {
+    "narrativeSegmentTitle": "Brief, clear title",
+    "severityRating": "HIGH/CRITICAL", 
+    "relevantChecklistTheme": "Primary theme only",
+    "relevantChecklistIndicator": "Most applicable indicator",
+    "indicatorEvidenceFromChecklist": "Concise explanation (max 100 words)",
+    "clipContextDescription": "Brief context (max 75 words)",
+    "reasonForSelection": "Why this is in the top 20 worst examples (max 100 words)",
+    "suggestedClip": [
+      {
+        "timestamp": 000.00,
+        "speaker": "SPEAKER_XX (Name)",
+        "quote": "Exact problematic quote"
+      }
+    ],
+    "fullerContextTimestamps": {
+      "start": 000.00,
+      "end": 000.00
+    },
+    "segmentDurationInSeconds": 00.0,
+    "harmPotential": "Direct explanation of potential real-world harm"
+  }
+]
+
+ANALYSIS CATEGORIES:
+
+Theme 1: Direct Medical Misinformation
+- Indicator 1.1: Specific medical advice without credentials or disclaimers
+- Indicator 1.2: Dangerous treatment recommendations
+- Indicator 1.3: Anti-vaccine misinformation presented as medical fact
+
+Theme 2: Conspiracy Theory Promotion  
+- Indicator 2.1: Government conspiracy claims presented as established fact
+- Indicator 2.2: Elite/shadow organization control narratives
+- Indicator 2.3: Event fabrication or false flag claims
+
+Theme 3: Scientific Authority Misrepresentation
+- Indicator 3.1: Claims of scientific consensus suppression
+- Indicator 3.2: Dismissal of established scientific institutions
+- Indicator 3.3: Promotion of debunked theories as valid alternatives
+
+Theme 4: Information Source Manipulation
+- Indicator 4.1: Presenting opinion/anecdote as scientific evidence
+- Indicator 4.2: Misrepresenting study findings or cherry-picking data
+- Indicator 4.3: Creating false equivalencies between proven/unproven treatments
+
+Theme 5: Authoritative Misinformation Amplification
+- Indicator 5.1: Host amplifying guest misinformation without challenge
+- Indicator 5.2: Both parties reinforcing problematic claims
+- Indicator 5.3: Presenting fringe views as mainstream scientific opinion
+
+MANDATORY STOPPING POINTS:
+- Stop at 20 segments maximum
+- Stop at 30,000 characters maximum
+
+Remember: This is about finding the absolute worst examples for a critique video, not cataloging every questionable statement.

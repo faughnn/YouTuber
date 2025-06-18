@@ -31,12 +31,6 @@ utils_dir = os.path.join(current_dir, '..', 'Utils')
 config_dir = os.path.join(current_dir, '..', 'Config')
 sys.path.extend([utils_dir, config_dir])
 
-try:
-    from file_organizer import FileOrganizer
-except ImportError as e:
-    print(f"Warning: Could not import FileOrganizer: {e}")
-    FileOrganizer = None
-
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
@@ -52,7 +46,7 @@ class NarrativeCreatorGenerator:
     def __init__(self, config_path: Optional[str] = None):
         """Initialize the narrative generator with API configuration."""
         self.api_key = "AIzaSyCsti0qnCEKOgzAnG_w41IfMNMxkyl3ysw"  # From transcript_analyzer.py
-        self.model_name = "gemini-2.5-flash-preview-05-20"
+        self.model_name = "gemini-2.5-pro-preview-06-05"  # Fixed model name
         self.prompt_file = os.path.join(
             current_dir, 'Prompts', 'tts_podcast_narrative_prompt.txt'
         )
@@ -143,22 +137,15 @@ class NarrativeCreatorGenerator:
     def _build_unified_prompt(self, episode_title: str, custom_instructions: str = "") -> str:
         """Build the unified prompt that references the uploaded analysis file."""
         logger.info("Building unified narrative prompt")
-        
-        # Format the prompt template with episode title and custom instructions
-        # The template file contains the complete prompt including JSON format specification
-        formatted_prompt = self.prompt_template.format(
-            episode_title=episode_title,
-            custom_instructions=custom_instructions or ""
-        )
-        
+        # The template does not use any format placeholders, so just return it directly
+        formatted_prompt = self.prompt_template
         logger.info(f"Unified prompt created: {len(formatted_prompt)} characters")
-        
         return formatted_prompt
     
     def _create_model(self):
         """Create Gemini model with optimized configuration."""
         return genai.GenerativeModel(
-            self.model_name,
+            self.model_name,            
             generation_config=genai.types.GenerationConfig(
                 temperature=0.1,
                 top_p=0.9,
@@ -215,7 +202,8 @@ class NarrativeCreatorGenerator:
             if not isinstance(sections, list) or len(sections) == 0:
                 logger.error("podcast_sections must be a non-empty list")
                 return False
-              # Validate each section has required fields based on section type
+                
+            # Validate each section has required fields based on section type
             for i, section in enumerate(sections):
                 section_type = section.get('section_type')
                 
@@ -234,32 +222,63 @@ class NarrativeCreatorGenerator:
                 
                 # Section-specific required fields
                 if section_type == 'video_clip':
-                    video_clip_keys = ['clip_id', 'start_time', 'end_time', 'title', 'selection_reason', 'severity_level', 'key_claims']
+                    video_clip_keys = ['clip_id', 'start_time', 'end_time', 'title', 'selection_reason', 
+                                     'severity_level', 'key_claims', 'suggestedClip']
                     for key in video_clip_keys:
                         if key not in section:
                             logger.error(f"Video clip section {i} missing required key: {key}")
                             return False
-                else:
-                    # All other section types require audio_tone and script_content
-                    other_section_keys = ['script_content', 'audio_tone']
-                    for key in other_section_keys:
-                        if key not in section:
-                            logger.error(f"Section {i} missing required key: {key}")
-                            return False
                     
-                    # Pre-clip and post-clip sections also need clip_reference
-                    if section_type in ['pre_clip', 'post_clip']:
-                        if 'clip_reference' not in section:
-                            logger.error(f"{section_type} section {i} missing required key: clip_reference")
+                    # Validate suggestedClip structure
+                    suggested_clip = section.get('suggestedClip', [])
+                    if not isinstance(suggested_clip, list):
+                        logger.error(f"Video clip section {i}: suggestedClip must be a list")
+                        return False
+                    
+                    # Validate each clip entry in suggestedClip
+                    for j, clip_entry in enumerate(suggested_clip):
+                        if not isinstance(clip_entry, dict):
+                            logger.error(f"Video clip section {i}, suggestedClip entry {j}: must be a dict")
+                            return False
+                        
+                        clip_required_keys = ['timestamp', 'speaker', 'quote']
+                        for key in clip_required_keys:
+                            if key not in clip_entry:
+                                logger.error(f"Video clip section {i}, suggestedClip entry {j} missing key: {key}")
+                                return False
+                
+                elif section_type in ['intro', 'outro']:
+                    # Intro and outro sections require script_content
+                    if 'script_content' not in section:
+                        logger.error(f"{section_type} section {i} missing required key: script_content")
+                        return False
+                
+                elif section_type in ['pre_clip', 'post_clip']:
+                    # Pre-clip and post-clip sections require script_content and clip_reference
+                    required_keys = ['script_content', 'clip_reference']
+                    for key in required_keys:
+                        if key not in section:
+                            logger.error(f"{section_type} section {i} missing required key: {key}")
                             return False
             
             # Check metadata structure
             metadata = script_data.get('script_metadata', {})
-            required_metadata_keys = ['timeline_ready', 'tts_segments_count']
+            required_metadata_keys = ['total_estimated_duration', 'target_audience', 'key_themes', 
+                                    'total_clips_analyzed', 'tts_segments_count', 'timeline_ready']
             for key in required_metadata_keys:
                 if key not in metadata:
                     logger.error(f"Missing metadata key: {key}")
                     return False
+            
+            # Validate key_themes is a list
+            if not isinstance(metadata.get('key_themes'), list):
+                logger.error("script_metadata.key_themes must be a list")
+                return False
+            
+            # Validate timeline_ready is boolean and true
+            if not isinstance(metadata.get('timeline_ready'), bool):
+                logger.error("script_metadata.timeline_ready must be a boolean")
+                return False
             
             if not metadata.get('timeline_ready'):
                 logger.error("timeline_ready must be true")
@@ -281,14 +300,13 @@ class NarrativeCreatorGenerator:
             analysis_json_path: Path to the analysis JSON file
             episode_title: Title of the episode for context
             custom_instructions: Optional custom instructions to add to prompt
-            
-        Returns:
+              Returns:
             Dict containing the unified script-timeline structure
         """
         logger.info(f"Starting unified narrative generation for: {episode_title}")
         logger.info(f"Analysis file: {analysis_json_path}")
         
-        max_retries = 3
+        max_retries = 1
         for attempt in range(max_retries):
             try:
                 logger.info(f"Attempt {attempt + 1}/{max_retries}")

@@ -14,6 +14,164 @@ Architecture Philosophy:
 Created: June 10, 2025
 Agent: Pipeline-Driven Implementation Agent
 Task Reference: Phase 2, Task 2.1 - Pipeline-Driven Orchestrator Foundation
+
+USAGE EXAMPLES
+==============
+
+1. Command Line Usage:
+   
+   # Full pipeline (all 7 stages) - YouTube URL to final video
+   python master_processor_v2.py --full-pipeline "https://www.youtube.com/watch?v=example"
+   
+   # Audio-only pipeline (stages 1-5) - Creates podcast-style audio
+   python master_processor_v2.py --audio-only "https://www.youtube.com/watch?v=example"
+   
+   # Script-only pipeline (stages 1-4) - Generates narrative script only
+   python master_processor_v2.py --script-only "https://www.youtube.com/watch?v=example"
+   
+   # Using custom configuration file
+   python master_processor_v2.py --full-pipeline "https://www.youtube.com/watch?v=example" --config "path/to/config.yaml"
+
+2. Programmatic Usage:
+
+   from master_processor_v2 import MasterProcessorV2
+   
+   # Initialize with default configuration
+   processor = MasterProcessorV2()
+   
+   # Or initialize with custom configuration
+   processor = MasterProcessorV2(config_path="path/to/custom_config.yaml")
+   
+   # Execute full pipeline
+   youtube_url = "https://www.youtube.com/watch?v=example"
+   final_video_path = processor.process_full_pipeline(youtube_url)
+   print(f"Final video created: {final_video_path}")
+   
+   # Execute audio-only pipeline
+   results = processor.process_audio_only(youtube_url)
+   print(f"Generated audio: {results['audio_path']}")
+   print(f"Generated script: {results['script_path']}")
+   
+   # Execute script-only pipeline
+   script_path = processor.process_until_script(youtube_url)
+   print(f"Generated script: {script_path}")
+
+3. Individual Stage Execution:
+
+   # For custom workflows, you can execute individual stages
+   processor = MasterProcessorV2()
+   
+   # Stage 1: Media Extraction
+   media_files = processor._stage_1_media_extraction(youtube_url)
+   audio_path = media_files['audio_path']
+   video_path = media_files['video_path']
+   
+   # Stage 2: Transcript Generation
+   transcript_path = processor._stage_2_transcript_generation(audio_path)
+   
+   # Stage 3: Content Analysis
+   analysis_path = processor._stage_3_content_analysis(transcript_path)
+   
+   # Stage 4: Narrative Generation
+   script_path = processor._stage_4_narrative_generation(analysis_path)
+   
+   # Stage 5: Audio Generation
+   generated_audio = processor._stage_5_audio_generation(script_path)
+   
+   # Stage 6: Video Clipping
+   clips_info = processor._stage_6_video_clipping(script_path, video_path)
+   
+   # Stage 7: Video Compilation
+   final_video = processor._stage_7_video_compilation(generated_audio, clips_info)
+
+4. Error Handling and Logging:
+
+   import logging
+   
+   # Set up logging to see detailed pipeline execution
+   logging.basicConfig(level=logging.INFO)
+   
+   try:
+       processor = MasterProcessorV2()
+       result = processor.process_full_pipeline(youtube_url)
+       print(f"Success! Session ID: {processor.session_id}")
+       
+   except Exception as e:
+       print(f"Pipeline failed: {e}")
+       # Check log file at: Code/Config/master_processor_v2.log
+
+5. Configuration Management:
+
+   # Default configuration is loaded from: Code/Config/default_config.yaml
+   # You can override paths, API keys, and processing parameters
+   
+   # Example custom configuration:
+   custom_config = {
+       'paths': {
+           'base_output_dir': 'C:/MyVideos/YouTuber_Output',
+           'content_dir': 'C:/MyVideos/Content'
+       },
+       'gemini_api_key': 'your-api-key-here',
+       'tts_settings': {
+           'voice': 'en-US-Studio-O',
+           'speed': 1.0
+       }
+   }
+
+6. Output Structure:
+
+   Each processing session creates an organized directory structure:
+   
+   Content/
+   └── Episode_Title_YYYYMMDD_HHMMSS/
+       ├── Input/              # Downloaded audio and video files
+       ├── Processing/         # Intermediate processing files
+       │   ├── original_audio_transcript.json
+       │   ├── content_analysis.json
+       │   └── narrative_script.json
+       ├── Generated/          # Generated audio files
+       │   └── generated_audio.wav
+       ├── Clips/              # Video clips extracted from original
+       └── Output/             # Final compiled video
+           └── final_video.mp4
+
+PIPELINE STAGES OVERVIEW
+========================
+
+Stage 1: Media Extraction
+- Downloads audio (MP3) and video (MP4) from YouTube URL
+- Creates organized episode directory structure
+- Validates download integrity
+
+Stage 2: Transcript Generation  
+- Performs speaker diarization on audio
+- Generates timestamped transcript with speaker labels
+- Outputs structured JSON transcript
+
+Stage 3: Content Analysis
+- Analyzes transcript using Google Gemini AI
+- Extracts key themes, topics, and insights
+- Identifies compelling moments for video clips
+
+Stage 4: Narrative Generation
+- Creates engaging podcast-style narrative script
+- Structures content for audio presentation
+- Includes timing and emphasis instructions
+
+Stage 5: Audio Generation
+- Converts script to speech using Google TTS
+- Handles text chunking and audio concatenation
+- Manages silence detection and cleanup
+
+Stage 6: Video Clipping
+- Extracts video segments based on content analysis
+- Synchronizes clips with narrative timing
+- Prepares clips for final compilation
+
+Stage 7: Video Compilation
+- Combines generated audio with video clips
+- Creates final polished video output
+- Handles timing synchronization and transitions
 """
 
 import os
@@ -44,8 +202,8 @@ from Content_Analysis.transcript_analyzer import analyze_with_gemini_file_upload
 # Stage 4: Narrative Generation - Direct import
 from Content_Analysis.podcast_narrative_generator import NarrativeCreatorGenerator
 
-# Stage 5: Audio Generation - Direct import
-from Audio_Generation import AudioBatchProcessor
+# Stage 5: Audio Generation - Direct import  
+from Chatterbox.simple_tts_engine import SimpleTTSEngine
 
 # Stage 6: Video Clipping - Direct import
 from Video_Clipper.integration import extract_clips_from_script
@@ -150,9 +308,18 @@ class MasterProcessorV2:
         logger.addHandler(file_handler)
         
         return logger
-    
     def _generate_session_id(self) -> str:
-        """Generate simple session ID for tracking."""
+        """
+        Generate unique session identifier for tracking pipeline execution.
+        
+        Returns:
+            str: Unique session ID in format 'session_YYYYMMDD_HHMMSS'
+            
+        Notes:
+            - Used for logging and episode directory organization
+            - Provides timestamp-based tracking for debugging
+            - Each processor instance gets unique session ID at initialization
+        """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"session_{timestamp}"
 
@@ -213,10 +380,9 @@ class MasterProcessorV2:
         except Exception as e:
             self.logger.error(f"Stage 1 failed: {e}")
             raise Exception(f"Media extraction failed: {e}")
-    
     def _stage_2_transcript_generation(self, audio_path: str) -> str:
         """
-        Stage 2: Direct call to diarize_audio().
+        Stage 2: Direct call to diarize_audio() with caching.
         
         Args:
             audio_path: Path to audio file
@@ -231,21 +397,27 @@ class MasterProcessorV2:
             if not os.path.exists(audio_path):
                 raise Exception(f"Audio file not found: {audio_path}")
             
+            # Check if transcript already exists
+            processing_dir = os.path.join(self.episode_dir, "Processing")
+            transcript_filename = "original_audio_transcript.json"
+            transcript_path = os.path.join(processing_dir, transcript_filename)
+            
+            if os.path.exists(transcript_path):
+                self.logger.info(f"Transcript already exists, skipping diarization: {transcript_path}")
+                return transcript_path
+            
             # Direct call to working module
             self.logger.info("Starting audio diarization...")
             hf_token = self.config.get('api', {}).get('huggingface_token', None)
             
-            transcript_result = diarize_audio(audio_path, hf_token)
-            
+            transcript_result = diarize_audio(audio_path, hf_token)            
             # Simple error checking - working module returns error strings on failure
             if isinstance(transcript_result, str) and "Error" in transcript_result:
-                raise Exception(f"Transcript generation failed: {transcript_result}")            # Save transcript to Processing folder and return file path
-            processing_dir = os.path.join(self.episode_dir, "Processing")
+                raise Exception(f"Transcript generation failed: {transcript_result}")
+            
+            # Save transcript to Processing folder and return file path
             if not os.path.exists(processing_dir):
                 os.makedirs(processing_dir)
-            
-            transcript_filename = "original_audio_transcript.json"
-            transcript_path = os.path.join(processing_dir, transcript_filename)
             
             # Parse the JSON string returned by diarize_audio into a dictionary
             # then save it properly as JSON
@@ -256,8 +428,7 @@ class MasterProcessorV2:
             
             # Validate transcript file exists
             if not os.path.exists(transcript_path):
-                raise Exception(f"Generated transcript file not found: {transcript_path}")
-            
+                raise Exception(f"Generated transcript file not found: {transcript_path}")            
             self.logger.info(f"Transcript generation completed: {transcript_path}")
             return transcript_path
             
@@ -267,7 +438,7 @@ class MasterProcessorV2:
     
     def _stage_3_content_analysis(self, transcript_path: str) -> str:
         """
-        Stage 3: Direct call to analyze_with_gemini_file_upload().
+        Stage 3: Direct call to analyze_with_gemini_file_upload() with caching.
         
         Args:
             transcript_path: Path to transcript file
@@ -282,8 +453,16 @@ class MasterProcessorV2:
             if not os.path.exists(transcript_path):
                 raise Exception(f"Transcript file not found: {transcript_path}")
             
-            # Ensure Processing directory exists
+            # Check if analysis already exists
             processing_dir = os.path.join(self.episode_dir, "Processing")
+            analysis_filename = "original_audio_analysis_results.json"
+            analysis_file_path = os.path.join(processing_dir, analysis_filename)
+            
+            if os.path.exists(analysis_file_path):
+                self.logger.info(f"Analysis results already exist, skipping analysis: {analysis_file_path}")
+                return analysis_file_path
+            
+            # Ensure Processing directory exists
             if not os.path.exists(processing_dir):
                 os.makedirs(processing_dir)
               # Configure Gemini API with the key from config BEFORE upload
@@ -321,18 +500,13 @@ class MasterProcessorV2:
                 file_object, 
                 analysis_rules,  # Use loaded rules instead of empty string
                 processing_dir
-            )
-            
+            )            
             if not analysis_content:
                 raise Exception("Analysis failed - no content returned")
             
             # Handle file saving in orchestrator (Option 2 from task instructions)
-            analysis_filename = "original_audio_analysis_results.json"
-            analysis_file_path = os.path.join(processing_dir, analysis_filename)
-            
             with open(analysis_file_path, 'w', encoding='utf-8') as f:
-                f.write(analysis_content)
-            # Validate analysis file exists
+                f.write(analysis_content)            # Validate analysis file exists
             if not os.path.exists(analysis_file_path):
                 raise Exception(f"Generated analysis file not found: {analysis_file_path}")
             
@@ -356,6 +530,12 @@ class MasterProcessorV2:
         self.logger.info(f"Stage 4: Narrative Generation for {analysis_path}")
         
         try:
+            # Check if unified script already exists
+            expected_script_path = os.path.join(self.episode_dir, "Output", "Scripts", "unified_podcast_script.json")
+            if os.path.exists(expected_script_path):
+                self.logger.info(f"Unified script already exists, skipping narrative generation: {expected_script_path}")
+                return expected_script_path
+            
             # Validate analysis file exists
             if not os.path.exists(analysis_path):
                 raise Exception(f"Analysis file not found: {analysis_path}")
@@ -365,14 +545,14 @@ class MasterProcessorV2:
             
             # Generate episode title from directory name
             episode_title = os.path.basename(self.episode_dir)
-            
-            # Direct method call to working module
+              # Direct method call to working module
             script_data = generator.generate_unified_narrative(analysis_path, episode_title)
             
             # Save script to Output/Scripts directory
             output_dir = os.path.join(self.episode_dir, "Output")
             script_path = generator.save_unified_script(script_data, output_dir)
-              # Convert Path object to string and validate script file exists
+            
+            # Convert Path object to string and validate script file exists
             script_path_str = str(script_path)
             if not os.path.exists(script_path_str):
                 raise Exception(f"Generated script file not found: {script_path_str}")
@@ -383,18 +563,18 @@ class MasterProcessorV2:
         except Exception as e:
             self.logger.error(f"Stage 4 failed: {e}")
             raise Exception(f"Narrative generation failed: {e}")
-    
+
     def _stage_5_audio_generation(self, script_path: str) -> Dict:
         """
-        Stage 5: Direct call to AudioBatchProcessor.process_episode_script().
+        Stage 5: Direct call to SimpleTTSEngine.process_episode_script().
         
         Args:
             script_path: Path to unified podcast script
             
         Returns:
-            Dict: Audio generation results
+            Dict: SimpleTTSEngine audio generation results
         """
-        self.logger.info(f"Stage 5: Audio Generation for {script_path}")
+        self.logger.info(f"Stage 5: SimpleTTSEngine Audio Generation for {script_path}")
         
         try:
             # Validate script file exists
@@ -402,32 +582,33 @@ class MasterProcessorV2:
                 raise Exception(f"Script file not found: {script_path}")
             
             # Direct class instantiation - no wrapper methods
-            processor = AudioBatchProcessor(self.config_path)
+            engine = SimpleTTSEngine(self.config_path)
             
             # Direct method call to working module
-            audio_results = processor.process_episode_script(script_path)
+            audio_results = engine.process_episode_script(script_path)
             
             # Validate audio generation results
             if not audio_results or not hasattr(audio_results, 'successful_sections'):
                 raise Exception("Audio generation failed - no results returned")
             
-            # Convert ProcessingReport to dictionary for pipeline handoff
+            # Convert SimpleProcessingReport to dictionary for pipeline handoff
             results_dict = {
-                'status': 'success',
+                'status': 'success' if audio_results.failed_sections == 0 else 'partial_success',
                 'total_sections': audio_results.total_sections,
                 'successful_sections': audio_results.successful_sections,
                 'failed_sections': audio_results.failed_sections,
                 'generated_files': audio_results.generated_files,
                 'output_directory': audio_results.output_directory,
-                'metadata_file': audio_results.metadata_file,
-                'processing_time': audio_results.processing_time            }
+                'metadata_file': audio_results.metadata_file or "",
+                'processing_time': audio_results.processing_time
+            }
             
-            self.logger.info(f"Audio generation completed: {results_dict}")
+            self.logger.info(f"SimpleTTSEngine audio generation completed: {results_dict}")
             return results_dict
             
         except Exception as e:
-            self.logger.error(f"Stage 5 failed: {e}")
-            raise Exception(f"Audio generation failed: {e}")
+            self.logger.error(f"Stage 5 SimpleTTSEngine failed: {e}")
+            raise Exception(f"SimpleTTSEngine audio generation failed: {e}")
     
     def _stage_6_video_clipping(self, script_path: str) -> Dict:
         """
@@ -644,10 +825,16 @@ class MasterProcessorV2:
 
 def create_argument_parser() -> argparse.ArgumentParser:
     """
-    Simple argument parser following existing patterns.
+    Create command line argument parser for Master Processor V2.
     
     Returns:
-        argparse.ArgumentParser: Configured argument parser
+        argparse.ArgumentParser: Configured argument parser with pipeline options
+        
+    Notes:
+        - URL is positional argument (different from original implementation)
+        - Pipeline options are mutually exclusive (--full-pipeline, --audio-only, --script-only)
+        - Optional configuration file path can be specified
+        - Includes built-in help with usage examples
     """
     parser = argparse.ArgumentParser(
         description='Master Processor V2: Pipeline-driven YouTube video processing orchestrator',
@@ -695,7 +882,25 @@ Examples:
 
 
 def main():
-    """Main function with basic error handling."""
+    """
+    Main entry point for Master Processor V2 command line interface.
+    
+    Handles:
+        - Command line argument parsing
+        - Orchestrator initialization with optional custom configuration
+        - Pipeline execution based on selected mode (full/audio-only/script-only)
+        - Error handling and user feedback
+        - Session ID reporting for tracking
+        
+    Exit Codes:
+        0: Success
+        1: Error or user cancellation
+        
+    Notes:
+        - Supports keyboard interrupt (Ctrl+C) for graceful cancellation
+        - Provides clear error messages for debugging
+        - Session ID printed for tracking and log correlation
+    """
     try:
         # Parse arguments
         parser = create_argument_parser()

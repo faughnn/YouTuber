@@ -710,7 +710,8 @@ FULL PROMPT SENT TO GEMINI:
         logger.info("Sending request to Gemini with uploaded file")
           # Create model with optimized configuration (no safety settings, no token limits)
         model = genai.GenerativeModel(
-            'gemini-2.5-flash-preview-05-20',
+            #'gemini-2.5-flash-preview-05-20',
+            'gemini-2.5-pro-preview-06-05',
             generation_config=genai.types.GenerationConfig(
                 temperature=0.1,
                 top_p=0.9,
@@ -830,8 +831,7 @@ def main():
         print("✅ FileOrganizer initialized - using organized output structure")
     else:
         print("⚠️  FileOrganizer not available - using fallback output behavior")
-    
-    # Generate organized output file path
+      # Generate organized output file path
     if not output_file:
         output_file = get_organized_output_path(transcript_file, file_organizer)
     

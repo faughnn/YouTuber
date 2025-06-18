@@ -1,517 +1,228 @@
-# APM Implementation Plan: Master Processor Architectural Refactoring
+# Implementation Plan: TTS API Integration Project
 
-**Project Goal**: Create a clean, streamlined `master_processor_v2.py` orchestrator that focuses purely on coordination and delegation, replacing the current bloated 1507-line implementation with proper separation of concerns.
+**Project:** Simple TTS API Integration - Replace Chatterbox TTS System  
+**Manager Agent:** APM Manager Agent  
+**Created:** June 16, 2025  
+**Status:** Active  
+**Priority:** High  
 
-**Date Created**: June 10, 2025  
-**Manager Agent Session**: Initial Planning Session  
-**Current Status**: ✅ **PHASE 3 COMPLETED** - Full pipeline operational  
-**Last Updated**: June 10, 2025 - Task 3.3 completion  
+## Project Overview
 
-**Memory Bank System**: Multi-file directory system (`Memory/`) with subdirectories per phase and individual log files per task, as detailed in `Memory/README.md`.
+### Objective
+Replace the current complex Chatterbox TTS system with a simplified API-based approach while maintaining all existing functionality, file organization, and pipeline compatibility.
 
----
+### Success Criteria
+- Sequential API calls work correctly (one request at a time)
+- All API interactions logged for debugging
+- JSON parsing works with existing `unified_podcast_script.json` format
+- Episode directory discovery and file organization maintained
+- Master processor Stage 5 integration complete
+- Legacy batch processing components removed
+- System fails fast on errors (no complex fallbacks)
 
-## 🎉 **PROJECT STATUS UPDATE - MAJOR MILESTONE ACHIEVED**
+### Key Constraints
+- API server at `localhost:4123` handles only one request at a time
+- Must maintain existing directory structure (`Content/Episode/Output/Audio/`)
+- Must preserve compatibility with existing JSON format and file organization
+- Fail fast approach - no complex error handling or retry mechanisms
 
-### ✅ **Phase 3 Complete - Pipeline Fully Operational**
-**Date**: June 10, 2025  
-**Achievement**: Complete 7-stage YouTube Video Processing Pipeline successfully implemented and validated
+## Implementation Phases
 
-#### 🚀 **Pipeline Execution Success**
-- **Test Case**: Joe Rogan Experience #2331 - Jesse Michels (3+ hour episode)
-- **Processing Time**: 25 minutes end-to-end
-- **Success Rate**: 100% across all 7 stages
-- **Final Output**: 91.2MB professional fact-checking podcast video
-- **Session ID**: `session_20250610_171234`
+### Phase 1: Core Component Development
+**Duration:** Week 1 (Days 1-5)  
+**Agent Type:** Implementation Agent  
 
-#### 🏆 **Implementation Achievements**
-- ✅ **Complete Pipeline**: All 7 stages integrated and working seamlessly
-- ✅ **Performance Optimized**: GPU acceleration, concurrent processing, API efficiency
-- ✅ **Production Ready**: Error handling, retry mechanisms, resource cleanup
-- ✅ **Quality Validated**: Broadcast-ready output with comprehensive content analysis
-- ✅ **Fully Documented**: Complete completion report and performance metrics
+#### Task 1.1: Create SimpleTTSEngine Class
+**Assigned to:** Implementation Agent  
+**Dependencies:** None  
+**Deliverables:**
+- `Code/Chatterbox/simple_tts_engine.py` with complete implementation
+- API integration with `localhost:4123/v1/audio/speech`
+- Sequential processing pipeline (one request at a time)
+- Comprehensive API call logging system
 
-#### 🎯 **Next Phase Ready**
-- **Phase 4: Testing & Validation** - Ready to begin comprehensive testing and optimization
-- **Pipeline Status**: Fully operational and ready for production deployment
-- **Codebase**: Clean, documented, and maintainable implementation
+**Technical Requirements:**
+```python
+class SimpleTTSEngine:
+    def __init__(self, config_path=None)
+    def process_episode_script(self, script_path: str) -> SimpleProcessingReport
+    def generate_speech(self, text: str, output_path: str) -> bool
+    def log_api_call(self, section_id: str, text_length: int, response_data: dict) -> None
+```
 
----
+**Key Implementation Points:**
+- Use existing `config_tts_api.py` for API configuration
+- Implement `SimpleProcessingReport` dataclass compatible with master processor expectations
+- Process audio sections: `intro`, `pre_clip`, `post_clip`, `outro`
+- Skip `video_clip` sections automatically
+- Generate filenames from `section_id`: `intro_001.wav`, `pre_clip_001.wav`
 
-## Project Context & Objectives
+#### Task 1.2: Adapt ChatterboxAudioFileManager
+**Assigned to:** Implementation Agent  
+**Dependencies:** Task 1.1 completion  
+**Deliverables:**
+- Modified `Code/Chatterbox/audio_file_manager.py`
+- Remove complex dependencies (`TTSResult`, `ChatterboxTTSConfig`)
+- Maintain file organization and directory structure logic
+- Keep episode directory discovery functionality
 
-### Current State Analysis
-- **Current File**: `master_processor.py` (1507 lines) - fundamentally flawed orchestrator with bloated embedded logic
-- **Target**: Clean orchestrator (~600-800 lines) built to serve existing working pipeline stages
-- **Approach**: Build new orchestrator dictated by working modules, ignore flawed current implementation
-- **Architecture**: Pipeline-driven orchestrator with **direct interaction** - no service/adapter layers
-- **Design Principle**: Orchestrator adapts to working modules directly, avoiding technical debt from abstraction layers
+**Specific Changes:**
+- Remove imports: `from .tts_engine import TTSResult`, `from .config import ChatterboxTTSConfig`
+- Adapt `organize_audio_file()` method for simple metadata structure
+- Maintain `create_episode_structure()` and `discover_episode_from_script()` methods
+- Simplify metadata generation for API-based processing
 
-### Pipeline Architecture (7 Stages)
-1. **MEDIA_EXTRACTION** - Audio/video from YouTube URL
-2. **TRANSCRIPT_GENERATION** - Dialogue extraction and formatting  
-3. **CONTENT_ANALYSIS** - Rule-based transcript analysis and segmentation
-4. **NARRATIVE_GENERATION** - Unified podcast script timeline creation
-5. **AUDIO_GENERATION** - TTS conversion (with interface for future manual recording)
-6. **VIDEO_CLIPPING** - Video clip extraction based on timeline
-7. **VIDEO_COMPILATION** - Final video assembly
+#### Task 1.3: Integrate JSON Parser
+**Assigned to:** Implementation Agent  
+**Dependencies:** Task 1.1, Task 1.2 completion  
+**Deliverables:**
+- Integration with existing `ChatterboxResponseParser`
+- Validation of `unified_podcast_script.json` format compatibility
+- Audio section extraction pipeline
 
-### Available Working Modules
-- `Extraction/` - YouTube download, transcript generation, URL utilities
-- `Content_Analysis/` - Transcript analysis, narrative generation
-- `Audio_Generation/` - TTS batch processing, audio management
-- `Video_Clipper/` - Video clip extraction and processing
-- `Video_Compilator/` - Final video assembly and compilation
+**Implementation Notes:**
+- Reuse existing `ChatterboxResponseParser.parse_response_file()`
+- Use `ChatterboxResponseParser.extract_audio_sections()` for section filtering
+- Maintain compatibility with existing JSON structure and validation
 
----
+### Phase 2: Master Processor Integration
+**Duration:** Week 1-2 (Days 4-8)  
+**Agent Type:** Implementation Agent  
 
-## Phase 1: Discovery & Architecture Analysis
+#### Task 2.1: Replace Stage 5 in Master Processor
+**Assigned to:** Implementation Agent  
+**Dependencies:** Phase 1 complete  
+**Deliverables:**
+- Modified `Code/master_processor_v2.py` Stage 5 method
+- Direct integration with `SimpleTTSEngine`
+- Compatible return format for pipeline continuation
 
-**Duration**: 2-3 days  
-**Objective**: Understand how existing working pipeline stages operate and design orchestrator to serve them
+**Specific Changes:**
+```python
+# Replace in _stage_5_audio_generation():
+# OLD: processor = ChatterboxBatchProcessor(self.config_path)
+# NEW: processor = SimpleTTSEngine(self.config_path)
 
-### Task 1.1 - Working Pipeline Stage Analysis (Priority Shift)
-**Agent Assignment**: Pipeline Analysis Agent  
-**Priority**: Critical  
-**Dependencies**: None  
+# Maintain return structure:
+results_dict = {
+    'status': 'success',
+    'total_sections': audio_results.total_sections,
+    'successful_sections': audio_results.successful_sections,
+    'failed_sections': audio_results.failed_sections,
+    'generated_files': audio_results.generated_files,
+    'output_directory': audio_results.output_directory,
+    'processing_time': audio_results.processing_time
+}
+```
 
-**Sub-tasks**:
-- Analyze each working module independently to understand their actual interfaces and requirements
-- Document how each of the 7 pipeline stages currently operates when working correctly
-- Identify the natural data flow and handoff patterns between working stages
-- Map actual input/output formats and requirements of working modules
-- Test each working module in isolation to verify functionality and interfaces
+#### Task 2.2: End-to-End Pipeline Testing
+**Assigned to:** Implementation Agent  
+**Dependencies:** Task 2.1 completion  
+**Deliverables:**
+- Full pipeline test with sample `unified_podcast_script.json`
+- Validation of file organization and output structure
+- API call logging verification
+- Master processor compatibility confirmation
 
-**Guiding Notes**: 
-- **CRITICAL**: Let the working pipeline stages dictate the orchestrator design, not the flawed current implementation
-- Focus on how modules work when functioning correctly, ignore current master_processor patterns
-- Document actual interfaces, not what the current implementation expects
+### Phase 3: Legacy Code Removal & Validation
+**Duration:** Week 2 (Days 8-10)  
+**Agent Type:** Implementation Agent  
 
-**Deliverables**:
-- Working pipeline stage analysis report
-- Actual module interface documentation
-- Natural data flow mapping
+#### Task 3.1: Remove Legacy Components
+**Assigned to:** Implementation Agent  
+**Dependencies:** Phase 2 complete and validated  
+**Deliverables:**
+- Remove `Code/Chatterbox/tts_engine.py`
+- Remove `Code/Chatterbox/batch_processor.py`
+- Remove `Code/Chatterbox/config.py`
+- Clean up unused imports and dependencies
+- Update `Code/Chatterbox/__init__.py` exports
 
-**Estimated Duration**: 1.5 days
+#### Task 3.2: Final System Validation
+**Assigned to:** Implementation Agent  
+**Dependencies:** Task 3.1 completion  
+**Deliverables:**
+- Comprehensive testing of all success criteria
+- Performance validation (sequential processing)
+- Error handling validation (fail fast behavior)
+- API logging system verification
+- Documentation of final system state
 
-### Task 1.2 - Current Implementation Analysis (Reduced Priority)
-**Agent Assignment**: Architecture Analysis Agent  
-**Priority**: Low  
-**Dependencies**: Task 1.1  
+## Dependencies and Resources
 
-**Sub-tasks**:
-- Analyze current `master_processor.py` only to identify what NOT to do
-- Document major architectural flaws and anti-patterns
-- Extract any useful orchestration patterns (minimal)
-- Identify configuration and utility integration that can be preserved
+### External Dependencies
+- Chatterbox TTS API server running on `localhost:4123`
+- Python `requests` library
+- Existing episode directory structure
 
-**Guiding Notes**: 
-- Use current implementation as a reference for what to avoid
-- Focus on identifying flawed patterns rather than preserving logic
-- Extract only essential configuration and utility patterns
+### Internal Dependencies
+- `Code/Chatterbox/config_tts_api.py` (existing configuration)
+- `Code/Chatterbox/json_parser.py` (existing JSON parser)
+- `Code/Chatterbox/audio_file_manager.py` (to be adapted)
+- `Code/master_processor_v2.py` (Stage 5 integration point)
 
-**Deliverables**:
-- Anti-pattern documentation
-- Minimal useful pattern extraction
-- Configuration requirements analysis
+### File System Requirements
+- Input: `Content/Episode/Output/Scripts/unified_podcast_script.json`
+- Output: `Content/Episode/Output/Audio/{section_id}.wav`
+- Metadata: `Content/Episode/Output/Chatterbox/generation_metadata.json`
 
-**Estimated Duration**: 0.5 days
+## Risk Assessment
 
-### Task 1.3 - Pipeline-Driven Architecture Design
-**Agent Assignment**: Pipeline Architecture Agent  
-**Priority**: Critical  
-**Dependencies**: Task 1.1  
+### Technical Risks
+- **API Server Dependency:** System depends on `localhost:4123` availability
+  - Mitigation: User manages API server (per project constraints)
+- **Sequential Performance:** May be slower than batch processing
+  - Mitigation: Acceptable per project requirements (simplicity over performance)
 
-**Sub-tasks**:
-- Design new orchestrator architecture based on working pipeline stage requirements
-- Create interface specifications for **direct interaction** with working modules (no service/adapter layers)
-- Design orchestrator that calls working modules directly, adapting to their natural interfaces
-- Specify minimal coordination logic required between proven working stages
-- Design configuration and error handling that supports working pipeline patterns without abstraction overhead
+### Implementation Risks
+- **Master Processor Compatibility:** Return format must match existing expectations
+  - Mitigation: Careful interface matching and testing in Task 2.1
+- **File Organization Compatibility:** Must maintain existing directory structure
+  - Mitigation: Reuse existing audio file manager logic (Task 1.2)
 
-**Guiding Notes**:
-- **CRITICAL**: Build orchestrator to serve working pipeline, not impose external structure
-- **NO SERVICE/ADAPTER LAYERS**: Orchestrator should interact directly with working modules to avoid technical debt
-- Design around natural interfaces discovered in Task 1.1, adapt orchestrator to working module patterns
-- Minimize orchestration logic - let working modules define the interaction patterns
+## Success Metrics
 
-**Deliverables**:
-- Pipeline-driven architecture specification with direct interaction patterns
-- Working module direct interface design (no abstraction layers)
-- Minimal orchestration requirements document
+### Functional Metrics
+- [ ] All audio sections processed successfully (intro, pre_clip, post_clip, outro)
+- [ ] Files organized in correct directory structure
+- [ ] Master processor pipeline completes without errors
+- [ ] API calls logged with required details
+- [ ] Legacy components removed cleanly
 
-**Estimated Duration**: 1 day
+### Performance Metrics
+- [ ] Sequential processing completes within acceptable timeframes
+- [ ] Memory usage reduced (no local model loading)
+- [ ] System startup time improved (no complex initialization)
 
----
+### Quality Metrics
+- [ ] Code maintainability improved (simplified architecture)
+- [ ] Error handling clear and immediate (fail fast)
+- [ ] Logging provides adequate debugging information
 
-## Phase 2: Core Orchestrator Implementation
+## Memory Bank Configuration
 
-**Duration**: 3-4 days  
-**Objective**: Build new `master_processor_v2.py` dictated by working pipeline stage requirements
+**Structure:** Single `Memory_Bank.md` file  
+**Justification:** This project has a clear, linear progression through defined phases with a manageable scope and 2-week timeline. A single file provides easy tracking of implementation progress and agent activities without the complexity of multi-file organization.
 
-### Task 2.1 - Pipeline-Driven Orchestrator Foundation
-**Agent Assignment**: Pipeline-Driven Implementation Agent  
-**Priority**: Critical  
-**Dependencies**: Phase 1 completion  
+**Location:** `C:\Users\nfaug\OneDrive - LIR\Desktop\YouTuber\Memory_Bank.md`
 
-**Sub-tasks**:
-- Create new `master_processor_v2.py` built around working pipeline stage interfaces
-- Implement orchestrator structure that **directly calls working modules** without service/adapter layers
-- Build minimal coordination layer with direct interaction patterns between working pipeline stages
-- Implement configuration and initialization patterns that support direct working module calls
-- Create lightweight progress tracking that doesn't interfere with direct pipeline interaction
+## Communication Protocol
 
-**Guiding Notes**:
-- **CRITICAL**: Build orchestrator to serve working pipeline stages, not impose structure
-- **NO ABSTRACTION LAYERS**: Use direct imports and method calls to working modules
-- Start with working module interfaces and build orchestrator around them directly
-- Minimize orchestration logic - let working stages drive the design through direct interaction
+All Implementation Agents must:
+1. Log all significant actions, decisions, and outcomes to the Memory Bank
+2. Report completion of each task with deliverables summary
+3. Escalate any blocking issues or scope changes to Manager Agent
+4. Follow the standardized Memory Bank log format for all entries
 
-**Deliverables**:
-- `master_processor_v2.py` foundation with direct working pipeline interaction
-- Pipeline-serving orchestrator framework with direct module calls
-- Working module direct integration foundation (no service layers)
+## Timeline Summary
 
-**Estimated Duration**: 1.5 days
+| Week | Phase | Key Deliverables |
+|------|-------|------------------|
+| Week 1 | Phase 1 & 2 Start | SimpleTTSEngine, adapted AudioFileManager, Master Processor integration |
+| Week 2 | Phase 2 Complete & Phase 3 | End-to-end testing, legacy code removal, final validation |
 
-### Task 2.2 - Media Extraction Stage Implementation
-**Agent Assignment**: Stage Implementation Agent A  
-**Priority**: Critical  
-**Dependencies**: Task 2.1  
-
-**Sub-tasks**:
-- Implement `_stage_1_media_extraction()` with delegation to youtube_audio_extractor.py and youtube_video_downloader.py
-- Remove URL validation wrapper methods, use YouTubeUrlUtils directly
-- Implement clean input validation using existing utilities
-- Add proper error handling and progress tracking
-- Create output standardization for downstream stages
-
-**Guiding Notes**:
-- Eliminate all embedded download logic - pure delegation only
-- Use subprocess calls or module imports as appropriate for each extraction script
-- Maintain progress tracking integration for user feedback
-
-**Deliverables**:
-- Media extraction stage implementation
-- Integration with existing extraction modules
-- Stage output standardization
-
-**Estimated Duration**: 1 day
-
-### Task 2.3 - Transcript & Analysis Stages Implementation
-**Agent Assignment**: Stage Implementation Agent B  
-**Priority**: Critical  
-**Dependencies**: Task 2.2  
-
-**Sub-tasks**:
-- Implement `_stage_2_transcript_generation()` with delegation to audio_diarizer.py and youtube_transcript_extractor.py
-- Implement `_stage_3_content_analysis()` with delegation to transcript_analyzer.py
-- Remove embedded transcript processing logic
-- Standardize handoff between transcript generation and content analysis
-- Integrate with existing Content_Analysis module patterns
-
-**Guiding Notes**:
-- Choose between audio_diarizer.py and youtube_transcript_extractor.py based on input source
-- Preserve existing analysis rule loading and Gemini integration patterns
-- Maintain file upload method for content analysis to avoid safety blocks
-
-**Deliverables**:
-- Transcript generation stage implementation
-- Content analysis stage implementation
-- Stage handoff standardization
-
-**Estimated Duration**: 1.5 days
-
-### Task 2.4 - Narrative & Audio Generation Stages
-**Agent Assignment**: Stage Implementation Agent C  
-**Priority**: Critical  
-**Dependencies**: Task 2.3  
-
-**Sub-tasks**:
-- Implement `_stage_4_narrative_generation()` with delegation to podcast_narrative_generator.py
-- Implement `_stage_5_audio_generation()` with flexible interface design
-- Create audio generation interface supporting TTS (current) and manual recording (future)
-- Integrate with Audio_Generation batch processing system
-- Implement unified_podcast_script handling and timeline creation
-
-**Guiding Notes**:
-- Design AudioGenerationInterface with strategy pattern for TTS vs manual recording
-- Implement only TTS functionality in current iteration
-- Ensure unified_podcast_script format compatibility across stages
-
-**Deliverables**:
-- Narrative generation stage implementation
-- Flexible audio generation interface with TTS implementation
-- Audio strategy pattern for future extensibility
-
-**Estimated Duration**: 1 day
+**Project Completion Target:** End of Week 2 (June 30, 2025)
 
 ---
 
-## Phase 3: Video Processing Implementation ✅ **COMPLETED**
-
-**Duration**: 3 days (completed June 10, 2025)  
-**Objective**: Implement video clip extraction and final compilation stages  
-**Status**: ✅ **COMPLETED** - All tasks successfully implemented and validated
-
-### Task 3.1 - Video Clipping Stage Implementation ✅
-
-**Status**: COMPLETED (June 10, 2025)  
-**Agent Assignment**: Video Processing Agent  
-**Priority**: High  
-**Dependencies**: Task 2.4  
-
-**Sub-tasks**:
-- ✅ Implement `_stage_6_video_clipping()` with delegation to Video_Clipper module
-- ✅ Integrate with unified_podcast_script timeline for clip extraction
-- ✅ Remove embedded video processing logic from current implementation
-- ✅ Implement proper handoff between audio generation and video clipping
-- ✅ Add video clip validation and organization
-
-**Completion Results**:
-- Stage 6 successfully implemented with direct delegation to Video_Clipper module
-- 7 video clips extracted with 100% success rate from Joe Rogan episode
-- File-based pipeline handoff working (script → clips manifest)
-- Updated Stage 7 method signature to handle new manifest format
-
-**Deliverables**:
-- ✅ Video clipping stage implementation in master_processor_v2.py
-- ✅ Timeline integration with unified_podcast_script  
-- ✅ Video clip validation and organization
-- ✅ Test verification and pipeline integration
-
-**Actual Duration**: 1 day
-
-### Task 3.2 - Video Compilation Stage Implementation ✅
-
-**Status**: COMPLETED (June 10, 2025)  
-**Agent Assignment**: Video Assembly Agent  
-**Priority**: High  
-**Dependencies**: Task 3.1  
-
-**Sub-tasks**:
-- ✅ Implement `_stage_7_video_compilation()` with delegation to Video_Compilator module
-- ✅ Integrate final video assembly using audio and video clips
-- ✅ Remove embedded compilation logic from current implementation
-- ✅ Implement quality control and output validation
-- ✅ Add final video metadata and organization
-
-**Completion Results**:
-- Stage 7 successfully implemented with direct delegation to Video_Compilator SimpleCompiler
-- Final video compilation tested with 21 segments (14 audio → video + 7 video clips)
-- 102.7 MB final video created with 22.2 minutes duration
-- Audio-video synchronization working correctly
-- Complete error handling and validation implemented
-
-**Deliverables**:
-- ✅ Video compilation stage implementation in master_processor_v2.py
-- ✅ Final video assembly integration with SimpleCompiler  
-- ✅ Output validation and quality control working
-- ✅ Complete testing with Joe Rogan episode data
-
-**Actual Duration**: 1 day
-
-### Task 3.3 - Pipeline Integration & Orchestration ✅ **COMPLETED**
-**Agent Assignment**: Integration Orchestration Agent  
-**Priority**: Critical  
-**Dependencies**: Tasks 3.1, 3.2  
-**Status**: ✅ **COMPLETED** (June 10, 2025)
-
-**Sub-tasks**:
-- ✅ Implement complete 7-stage pipeline orchestration in main processing method
-- ✅ Add stage dependency management and error recovery
-- ✅ Implement optional stage execution (partial pipeline runs)
-- ✅ Add comprehensive logging and progress tracking across all stages
-- ✅ Create pipeline state management and resumption capabilities
-
-**Completion Results**:
-- ✅ **Full Pipeline Execution**: Successfully processed complete Joe Rogan episode from YouTube URL to final video
-- ✅ **7-Stage Integration**: All stages (Media Extraction → Transcript Generation → Content Analysis → Narrative Generation → Audio Generation → Video Clipping → Video Compilation) working seamlessly
-- ✅ **Performance Validation**: 25-minute processing time for 3+ hour content with GPU acceleration
-- ✅ **Error Recovery**: Format fallbacks, retry mechanisms, and cleanup validated
-- ✅ **Session Tracking**: Complete logging and session management (session_20250610_171234)
-- ✅ **Quality Output**: 91.2MB final video (1055.69 seconds) with 100% success rate across all stages
-
-**Final Implementation**:
-- **File**: `master_processor_v2.py` - fully operational orchestrator
-- **Test Case**: Joe Rogan Experience #2331 - Jesse Michels (https://www.youtube.com/watch?v=r9Ldl70x5Fg)
-- **Output**: Complete fact-checking podcast video with 20 segments (14 audio + 6 video)
-- **Documentation**: Complete completion report in `Documentation/Phase_3_Video_Processing_Implementation/`
-
-**Actual Duration**: 3 days (including comprehensive end-to-end validation)
-
----
-
-## Phase 4: Testing & Validation **🚀 READY TO BEGIN**
-
-**Duration**: 2-3 days  
-**Objective**: Create comprehensive test suite and validate new implementation  
-**Status**: **🚀 READY TO BEGIN** - Phase 3 completed successfully, pipeline fully operational
-
-**Prerequisites Met**:
-- ✅ **Phase 3 Complete**: Full 7-stage pipeline implemented and validated
-- ✅ **End-to-End Testing**: Complete pipeline execution successful
-- ✅ **Performance Baseline**: Established benchmarks for optimization
-- ✅ **Production Readiness**: Pipeline ready for comprehensive testing
-
-### Task 4.1 - Unit Testing Implementation
-**Agent Assignment**: Testing Agent A  
-**Priority**: High  
-**Dependencies**: Phase 3 completion  
-
-**Sub-tasks**:
-- Create unit tests for each stage implementation
-- Test module integration patterns and delegation logic
-- Create mock objects for external dependencies (APIs, file systems)
-- Implement test data sets for each pipeline stage
-- Add configuration and error handling tests
-
-**Guiding Notes**:
-- Focus on testing orchestration logic, not underlying module functionality
-- Use pytest framework with appropriate fixtures
-- Test both success and failure scenarios for each stage
-
-**Deliverables**:
-- Comprehensive unit test suite
-- Test data sets and mock objects
-- Configuration and error handling tests
-
-**Estimated Duration**: 1.5 days
-
-### Task 4.2 - Integration Testing & Validation
-**Agent Assignment**: Testing Agent B  
-**Priority**: Critical  
-**Dependencies**: Task 4.1  
-
-**Sub-tasks**:
-- Create end-to-end integration tests for complete pipeline
-- Test with real YouTube URLs and content
-- Validate output quality and format consistency
-- Performance testing and comparison with original implementation
-- Create regression testing for critical functionality
-
-**Guiding Notes**:
-- Test with variety of content types (different lengths, formats, languages)
-- Compare output quality and processing time with original master_processor.py
-- Ensure no functionality regression in core features
-
-**Deliverables**:
-- End-to-end integration tests
-- Performance validation and comparison
-- Regression testing suite
-
-**Estimated Duration**: 1.5 days
-
-### Task 4.3 - Documentation & Usage Validation
-**Agent Assignment**: Documentation Agent  
-**Priority**: High  
-**Dependencies**: Task 4.2  
-
-**Sub-tasks**:
-- Create comprehensive documentation for new architecture
-- Document API changes and new usage patterns
-- Create migration guide from original master_processor
-- Add code comments and docstring documentation
-- Create troubleshooting guide for common issues
-
-**Guiding Notes**:
-- Document architectural decisions and design patterns used
-- Provide clear examples of usage for different scenarios
-- Include performance characteristics and limitations
-
-**Deliverables**:
-- Architecture and usage documentation
-- Migration guide and troubleshooting documentation
-- Code documentation and examples
-
-**Estimated Duration**: 1 day
-
----
-
-## Phase 5: Deployment & Optimization
-
-**Duration**: 1-2 days  
-**Objective**: Finalize implementation and prepare for production use
-
-### Task 5.1 - Final Integration & Cleanup
-**Agent Assignment**: Deployment Agent  
-**Priority**: Medium  
-**Dependencies**: Phase 4 completion  
-
-**Sub-tasks**:
-- Final code review and cleanup
-- Remove debug code and optimize performance
-- Add production logging and monitoring
-- Create deployment checklist and requirements
-- Update configuration files and dependencies
-
-**Guiding Notes**:
-- Ensure production-ready code quality and performance
-- Add appropriate error handling for production scenarios
-- Document system requirements and dependencies
-
-**Deliverables**:
-- Production-ready master_processor_v2.py
-- Deployment documentation and requirements
-- Performance optimization implementation
-
-**Estimated Duration**: 1 day
-
-### Task 5.2 - Legacy Preservation & Transition
-**Agent Assignment**: Transition Agent  
-**Priority**: Low  
-**Dependencies**: Task 5.1  
-
-**Sub-tasks**:
-- Archive original master_processor.py as reference
-- Create transition documentation comparing old vs new approaches
-- Add deprecation notices and migration instructions
-- Update any external references or documentation
-- Create rollback procedures if needed
-
-**Guiding Notes**:
-- Preserve original implementation for reference and emergency rollback
-- Document differences in behavior and capabilities
-- Ensure smooth transition for any existing workflows
-
-**Deliverables**:
-- Legacy preservation and archival
-- Transition documentation and procedures
-- Migration support materials
-
-**Estimated Duration**: 0.5 days
-
----
-
-## Note on Handover Protocol
-
-For long-running projects or situations requiring context transfer (e.g., exceeding LLM context limits, changing specialized agents), the APM Handover Protocol should be initiated. This ensures smooth transitions and preserves project knowledge. Detailed procedures are outlined in the framework guide:
-
-`prompts/01_Manager_Agent_Core_Guides/05_Handover_Protocol_Guide.md`
-
-The current Manager Agent or the User should initiate this protocol as needed.
-
----
-
-## Project Success Criteria
-
-**Primary Objectives**:
-- ✅ Build new orchestrator dictated by working pipeline stage requirements
-- ✅ Replace fundamentally flawed 1507-line implementation with pipeline-driven design
-- ✅ Achieve orchestrator that directly serves working modules without abstraction layers
-- ✅ Create flexible architecture supporting future enhancements while serving existing pipeline
-- ✅ Eliminate all embedded logic - pure coordination via direct working pipeline stage calls
-
-**Quality Metrics**:
-- New orchestrator successfully coordinates all 7 working pipeline stages through direct interaction
-- Working modules define interface patterns, orchestrator adapts to them directly (no service layers)
-- Performance better than original flawed implementation due to direct calls
-- Clean pipeline-driven architecture with working modules as first-class citizens
-- Comprehensive testing validates direct coordination of working pipeline stages
-
-**Deliverables Checklist**:
-- [ ] `master_processor_v2.py` - Pipeline-driven orchestrator with direct working module interaction
-- [ ] Direct integration layer with natural data flow patterns (no abstraction overhead)
-- [ ] Test suite validating direct coordination of working pipeline stages
-- [ ] Pipeline-driven architecture documentation emphasizing direct interaction approach
-- [ ] Performance validation showing improvement over flawed original
+**Next Steps:** Manager Agent will now create detailed task assignment prompts for Implementation Agents based on this plan, starting with Phase 1, Task 1.1.

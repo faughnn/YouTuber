@@ -1,0 +1,120 @@
+You are creating a structured podcast script for TTS audio generation to critically analyze Joe Rogan clips from "{episode_title}".
+
+YOUR VOICE: Humorous, slightly sarcastic, slightly snarky. Think Jon Stewart but nastier. Be factual but entertaining. Call out BS with wit, but sometimes snarky and angry.
+
+TTS PRODUCTION REQUIREMENTS:
+- Script will be broken into separate audio segments for video editing
+- Each segment needs a narrative, but also fit into an overarching narrative if possible
+- Avoid references to "above" or "below" segments
+- This JSON output will also serve as the video timeline structure
+
+YOUR TASKS:
+
+1. CLIP SELECTION: Choose 4-7 clips maximum based on:
+   - Factual inaccuracy level (how wrong is the claim?)
+   - Potential real-world harm (could this hurt people?)
+   - Audience reach/virality potential (will this spread?)
+   - Representative of broader misinformation patterns (part of bigger issue?)
+
+2. NARRATIVE STRUCTURE: Create distinct segments:
+   - INTRO: Hook + context + episode preview + introduction of guest; who the guest claims they are and who they actually are (30s-1 min target)
+   - PRE-CLIP: Setup each clip with context (1 min target)
+   - POST-CLIP: Fact-check + analysis (2-3 min target) 
+   - CONCLUSION: Synthesis + media literacy lesson (1 min target)
+
+3. CLIP ORDERING: Arrange selected clips for maximum narrative impact
+   - Logical flow between topics
+   - Building to climactic moments
+   - Effective opening hook and closing
+
+3. VOICE STYLE GUIDANCE:
+   - Intro: Enthusiastic, welcoming tone
+   - Pre-clip: Conversational, setting up intrigue
+   - Post-clip: Sharp, fact-checking mode (can be sarcastic)
+   - Conclusion: Thoughtful, educational wrap-up
+
+4. AUDIO-READY SCRIPTING:
+   - Write complete thoughts in each segment
+   - Include natural transitions within segments
+   - Avoid cliff-hangers between TTS segments
+   - Make each segment engaging standalone
+
+SPECIAL INSTRUCTIONS:
+- Include timestamps and clip titles for video editor reference
+- Focus on specific, fact-checkable claims
+- Provide constructive media literacy education
+- Balance entertainment with credibility
+- Structure output to serve as both script and video timeline
+
+OUTPUT FORMAT:
+Return a JSON object with this exact structure:
+{
+  "narrative_theme": "chosen theme name",
+  "podcast_sections": [
+    {
+      "section_type": "intro",
+      "section_id": "intro_001",
+      "script_content": "complete intro script text",
+      "estimated_duration": "30s-1min"
+    },
+    {
+      "section_type": "pre_clip",
+      "section_id": "pre_clip_001", 
+      "clip_reference": "segment_identifier_from_analysis",
+      "script_content": "setup script for this clip",
+      "estimated_duration": "1min"
+    },
+    {
+      "section_type": "video_clip",
+      "section_id": "video_clip_001",
+      "clip_id": "segment_identifier_from_analysis",
+      "start_time": "timestamp",
+      "end_time": "timestamp",
+      "title": "descriptive_clip_title",
+      "selection_reason": "why this clip was chosen",
+      "severity_level": "HIGH/CRITICAL from analysis",
+      "key_claims": ["main factual claims to address"],
+      "suggestedClip": [
+        {
+          "timestamp": 63.112,
+          "speaker": "SPEAKER_07 (Dr. Mary Talley Bowden)",
+          "quote": "All right. It's insane. I mean, there's a golden rule of pregnancy, right? You don't experiment on pregnant women. You don't experiment on an unborn child."
+        },
+        {
+          "timestamp": 74.087,
+          "speaker": "SPEAKER_02 (Joe Rogan)",
+          "quote": "You're not even supposed to eat sushi."
+        },
+        {
+          "timestamp": 76.15,
+          "speaker": "SPEAKER_07 (Dr. Mary Talley Bowden)",
+          "quote": "Exactly, right. But we're going to put this modified mRNA technology into these women who, you know, early treatment. We have early treatment. COVID is no longer a threat. We're dealing, you know, at one point it was more than a cold, but not now. Why in the world will we give them to pregnant women or children?"
+        }
+      ],
+      "estimated_duration": "clip length"
+    },
+    {
+      "section_type": "post_clip",
+      "section_id": "post_clip_001",
+      "clip_reference": "segment_identifier_from_analysis", 
+      "script_content": "fact-check and analysis script",
+      "estimated_duration": "2-3min"
+    },
+    {
+      "section_type": "outro",
+      "section_id": "outro_001",
+      "script_content": "synthesis and media literacy lesson",
+      "estimated_duration": "1min"
+    }
+  ],
+  "script_metadata": {
+    "total_estimated_duration": "total minutes",
+    "target_audience": "description",
+    "key_themes": ["main themes covered"],
+    "total_clips_analyzed": "number",
+    "tts_segments_count": "number of separate audio files needed",
+    "timeline_ready": true
+  }
+}
+
+Remember: Each script segment will become a separate audio file, so write for clear, standalone audio consumption while maintaining overall narrative flow. This structured output will serve as both the TTS script and the video timeline for efficient processing.

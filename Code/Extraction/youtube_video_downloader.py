@@ -24,6 +24,81 @@ try:
 except ImportError:
     from youtube_url_utils import YouTubeUrlUtils
 
+def ensure_1080p_resolution(video_path):
+    """
+    Ensures the video is exactly 1920x1080 resolution.
+    If not, scales it using FFmpeg while maintaining aspect ratio with padding.
+    
+    Args:
+        video_path: Path to the input video file
+        
+    Returns:
+        Path to the output video (same as input if no scaling needed)
+    """
+    try:
+        # Check current video resolution
+        probe_command = [
+            'ffprobe',
+            '-v', 'quiet',
+            '-print_format', 'json',
+            '-show_streams',
+            video_path
+        ]
+        
+        result = subprocess.run(probe_command, capture_output=True, text=True, check=True)
+        import json
+        video_info = json.loads(result.stdout)
+        
+        # Find video stream
+        video_stream = None
+        for stream in video_info['streams']:
+            if stream['codec_type'] == 'video':
+                video_stream = stream
+                break
+        
+        if not video_stream:
+            print("Warning: No video stream found, skipping resolution check")
+            return video_path
+            
+        current_width = int(video_stream['width'])
+        current_height = int(video_stream['height'])
+        
+        # Check if already 1920x1080
+        if current_width == 1920 and current_height == 1080:
+            print(f"Video is already 1920x1080: {video_path}")
+            return video_path
+        
+        print(f"Current resolution: {current_width}x{current_height}, scaling to 1920x1080")
+        
+        # Create output path for scaled video
+        base_path, ext = os.path.splitext(video_path)
+        temp_path = f"{base_path}_temp{ext}"
+        
+        # Scale video to 1920x1080 with proper aspect ratio and padding
+        scale_command = [
+            'ffmpeg',
+            '-i', video_path,
+            '-vf', 'scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black',
+            '-c:a', 'copy',  # Copy audio without re-encoding
+            '-y',  # Overwrite output file
+            temp_path
+        ]
+        
+        subprocess.run(scale_command, check=True, capture_output=True)
+        
+        # Replace original with scaled version
+        if os.path.exists(temp_path):
+            os.replace(temp_path, video_path)
+            print(f"Video successfully scaled to 1920x1080: {video_path}")
+            return video_path
+        else:
+            print("Warning: Scaling failed, using original video")
+            return video_path
+            
+    except Exception as e:
+        print(f"Warning: Failed to check/scale video resolution: {e}")
+        return video_path
+
 def download_video(video_url_or_id, file_organizer=None):
     """Downloads the video from a YouTube video using yt-dlp and saves it as MP4 directly to the episode Input folder.
     
@@ -74,49 +149,41 @@ def download_video(video_url_or_id, file_organizer=None):
         output_path = os.path.join(episode_input_folder, output_filename)
 
         print(f"Downloading video for: {video_title}")
-        print(f"Output will be saved to: {output_path}")
-          # Comprehensive format selection strategies organized by quality tiers
-        # Based on systematic testing of 39 different methods
+        print(f"Output will be saved to: {output_path}")          # Format selection prioritizing 1920x1080 resolution for consistent video compilation
+        # This ensures all downloaded videos match the resolution of generated audio segments
         quality_tiers = [
-            # Tier 1: Maximum Quality (4K, unrestricted best)
+            # Tier 1: Exact 1080p targeting (1920x1080)
             [
-                "best",                                    # Best available quality
-                "bestvideo+bestaudio",                     # Best video + best audio
-                "bestvideo+bestaudio/best",               # Combined with single file fallback
+                "bestvideo[height=1080]+bestaudio",       # Exact 1080p video + best audio
+                "137+140",                                # 1080p MP4 video + 128k AAC audio
+                "299+140",                                # 1080p60 MP4 video + 128k AAC audio
+                "best[height=1080]",                      # Best exact 1080p
+                "bestvideo[height=1080][ext=mp4]+bestaudio[ext=m4a]", # 1080p MP4 + M4A audio
             ],
             
-            # Tier 2: High Quality (1080p optimized)
+            # Tier 2: 1080p range with upscaling preference
             [
-                "best[height<=1080]",                     # Best up to 1080p
-                "bestvideo[height<=1080]+bestaudio",      # Best 1080p video + audio
+                "bestvideo[height<=1080][height>=1080]+bestaudio", # Prefer 1080p, allow exact match
+                "best[height<=1080][height>=720]",        # High quality range with 1080p preference
                 "270+233",                                # 1080p HLS + audio
-                "137+140",                                # 1080p video + 128k audio
-                "best[ext=mp4]",                          # Best MP4 format
-                "best[vcodec^=avc]",                      # Best H.264 video
+                "136+140",                                # 720p video + audio (will be upscaled)
             ],
             
-            # Tier 3: Good Quality (720p reliable)
+            # Tier 3: High quality with upscaling capability  
             [
-                "best[height<=720]",                      # Best up to 720p
-                "bestvideo[height<=720]+bestaudio",       # Best 720p video + audio
-                "232+233",                                # 720p HLS + audio
-                "136+140",                                # 720p video + 128k audio
+                "bestvideo[height<=1080]+bestaudio",      # Best up to 1080p + audio
+                "best[height<=1080]",                     # Best up to 1080p
+                "best[ext=mp4][height<=1080]",            # Best MP4 up to 1080p
+                "bestvideo[vcodec^=avc][height<=1080]+bestaudio", # H.264 up to 1080p
+            ],
+            
+            # Tier 4: Fallback with mandatory upscaling
+            [
+                "bestvideo[height<=720]+bestaudio",       # 720p or lower (will be upscaled)
                 "22",                                     # 720p MP4 (format 22)
-                "best[acodec^=mp4a]",                     # Best AAC audio
-            ],
-            
-            # Tier 4: Fallback Quality (480p and below)
-            [
-                "best[height<=480]",                      # Best up to 480p
-                "18",                                     # 360p MP4 (format 18)
-                "worst",                                  # Worst available quality
-                "best/worst",                             # Best with worst fallback
-            ],
-            
-            # Tier 5: Protocol-specific fallbacks
-            [
-                "best[protocol^=https]",                  # HTTPS protocols only
-                "best[protocol^=m3u8]",                   # HLS streams only
+                "18",                                     # 360p MP4 (format 18) - will be upscaled
+                "best",                                   # Any best available
+                "worst",                                  # Last resort
             ]
         ]
         
@@ -143,11 +210,16 @@ def download_video(video_url_or_id, file_organizer=None):
                     normalized_url
                 ]
                 
-                subprocess.run(command, check=True, capture_output=True, text=True)
-                
+                subprocess.run(command, check=True, capture_output=True, text=True)                
                 if os.path.exists(output_path):
                     download_success = True
                     print(f"Video downloaded successfully with format option {i+1}")
+                    
+                    # Ensure video is exactly 1920x1080 for consistent compilation
+                    scaled_path = ensure_1080p_resolution(output_path)
+                    if scaled_path != output_path:
+                        print(f"Video scaled to 1920x1080: {scaled_path}")
+                    
                     break
                     
             except subprocess.CalledProcessError as e:
