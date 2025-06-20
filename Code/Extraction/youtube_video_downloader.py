@@ -13,6 +13,8 @@ To use this script:
 import sys
 import subprocess
 import os
+from tqdm import tqdm
+import yt_dlp
 
 # Import FileOrganizer for consistent path management
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -23,6 +25,38 @@ try:
     from .youtube_url_utils import YouTubeUrlUtils
 except ImportError:
     from youtube_url_utils import YouTubeUrlUtils
+
+def progress_hook(d):
+    """Progress hook for yt-dlp video downloads"""
+    if d['status'] == 'downloading':
+        if 'total_bytes' in d:
+            total = d['total_bytes']
+        elif 'total_bytes_estimate' in d:
+            total = d['total_bytes_estimate']
+        else:
+            total = None
+            
+        downloaded = d.get('downloaded_bytes', 0)
+        
+        if total:
+            # Update existing progress bar or create new one
+            if not hasattr(progress_hook, 'pbar'):
+                progress_hook.pbar = tqdm(
+                    total=total,
+                    unit='B',
+                    unit_scale=True,
+                    desc="Downloading video"
+                )
+            
+            # Update progress
+            progress_hook.pbar.n = downloaded
+            progress_hook.pbar.refresh()
+            
+    elif d['status'] == 'finished':
+        # Close progress bar when download is complete
+        if hasattr(progress_hook, 'pbar'):
+            progress_hook.pbar.close()
+            delattr(progress_hook, 'pbar')
 
 def ensure_1080p_resolution(video_path):
     """
@@ -119,17 +153,14 @@ def download_video(video_url_or_id, file_organizer=None):
         print(f"Validated input: {video_id}")
         if validation_result['warnings']:
             for warning in validation_result['warnings']:
-                print(f"Warning: {warning}")
-
-        # Get video title first to determine episode structure
-        get_title_command = [
-            'yt-dlp',
-            '--get-title',
-            '--no-warnings',
-            normalized_url
-        ]
-        process = subprocess.run(get_title_command, capture_output=True, text=True, check=True, encoding='utf-8')
-        video_title = process.stdout.strip()
+                print(f"Warning: {warning}")        # Get video title first to determine episode structure
+        with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+            try:
+                info = ydl.extract_info(normalized_url, download=False)
+                video_title = info.get('title', 'Unknown Title')
+            except Exception as e:
+                print(f"Warning: Could not extract video title: {e}")
+                video_title = f"Video_{video_id}"
         
         # Get the episode Input folder using FileOrganizer
         if file_organizer is None:
@@ -198,22 +229,28 @@ def download_video(video_url_or_id, file_organizer=None):
         for i, format_selector in enumerate(format_options):
             try:
                 print(f"Attempting download with format option {i+1}: {format_selector}")
+                  # Reset progress bar for each attempt
+                if hasattr(progress_hook, 'pbar'):
+                    progress_hook.pbar.close()
+                    delattr(progress_hook, 'pbar')
                 
-                command = [
-                    'yt-dlp',
-                    '-f', format_selector,
-                    '-o', output_path,
-                    '--merge-output-format', 'mp4',  # Ensure output is MP4
-                    '--no-warnings',
-                    '--extractor-retries', '3',
-                    '--fragment-retries', '3',
-                    normalized_url
-                ]
-                
-                subprocess.run(command, check=True, capture_output=True, text=True)                
+                # Configure yt-dlp options with progress hook
+                ydl_opts = {
+                    'format': format_selector,
+                    'outtmpl': output_path,
+                    'merge_output_format': 'mp4',
+                    'progress_hooks': [progress_hook],
+                    'quiet': True,
+                    'no_warnings': True,
+                    'retries': 3,
+                    'fragment_retries': 3,
+                }                
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([normalized_url])
+                    
                 if os.path.exists(output_path):
                     download_success = True
-                    print(f"Video downloaded successfully with format option {i+1}")
+                    print(f"\nVideo downloaded successfully with format option {i+1}")
                     
                     # Ensure video is exactly 1920x1080 for consistent compilation
                     scaled_path = ensure_1080p_resolution(output_path)
@@ -222,18 +259,16 @@ def download_video(video_url_or_id, file_organizer=None):
                     
                     break
                     
-            except subprocess.CalledProcessError as e:
+            except Exception as e:
                 last_error = e
-                error_output = e.stderr if e.stderr else e.stdout
-                print(f"Format option {i+1} failed: {error_output}")
+                print(f"Format option {i+1} failed: {str(e)}")
                 if i < len(format_options) - 1:
                     print("Trying next format option...")
                 continue
         
         if not download_success:
             if last_error:
-                error_output = last_error.stderr if last_error.stderr else last_error.stdout
-                raise subprocess.CalledProcessError(last_error.returncode, last_error.cmd, error_output)
+                raise last_error
             else:
                 raise Exception("All format options failed")
 
@@ -243,15 +278,11 @@ def download_video(video_url_or_id, file_organizer=None):
         else:
             return f"Video download failed, file not found at: {output_path}"
 
-    except subprocess.CalledProcessError as e:
-        error_output = e.stderr if e.stderr else e.stdout
-        if "no suitable format found" in error_output.lower():
-             return f"An error occurred with yt-dlp: No suitable MP4 format found. Error: {error_output}"
-        return f"An error occurred with yt-dlp: {error_output}"
-    except FileNotFoundError:
-        return "Error: yt-dlp command not found. Please ensure yt-dlp is installed and in your PATH."
     except Exception as e:
-        return f"An unexpected error occurred: {e}"
+        error_msg = str(e)
+        if "no suitable format found" in error_msg.lower():
+             return f"An error occurred with yt-dlp: No suitable MP4 format found. Error: {error_msg}"
+        return f"An error occurred with yt-dlp: {error_msg}"
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

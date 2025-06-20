@@ -259,7 +259,6 @@ class SimpleCompiler:
         converted_videos = []
         
         self.logger.info(f"Converting {len(audio_segments)} audio segments to video...")
-        
         for segment in audio_segments:
             if segment.segment_type != 'audio':
                 continue
@@ -268,10 +267,15 @@ class SimpleCompiler:
             output_filename = f"seg_{segment.order+1:03d}_{segment.segment_id}.mp4"
             output_path = temp_dir / output_filename
             
-            self.logger.info(f"Converting {segment.file_path.name} → {output_filename}")
+            # Extract section_type from metadata for random image selection
+            section_type = None
+            if segment.metadata and isinstance(segment.metadata, dict):
+                section_type = segment.metadata.get('section_type')
             
-            # Convert audio to video
-            if self.audio_converter.convert_audio_segment(segment.file_path, output_path):
+            self.logger.info(f"Converting {segment.file_path.name} → {output_filename} (section_type: {section_type})")
+            
+            # Convert audio to video with segment type for random background image selection
+            if self.audio_converter.convert_audio_segment(segment.file_path, output_path, section_type):
                 converted_videos.append(output_path)
                 self.logger.info(f"✓ Converted: {segment.file_path.name}")
             else:

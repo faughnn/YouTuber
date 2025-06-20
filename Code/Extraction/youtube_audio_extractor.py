@@ -13,6 +13,8 @@ To use this script:
 import sys
 import subprocess
 import os
+from tqdm import tqdm
+import yt_dlp
 
 # Import FileOrganizer for consistent path management
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -44,13 +46,59 @@ def get_episode_input_folder(episode_title):
     for key, path in config['paths'].items():
         if not os.path.isabs(path):
             config['paths'][key] = os.path.normpath(os.path.join(base_dir, path))
-    
-    # Create file organizer and get episode structure
+      # Create file organizer and get episode structure
     file_organizer = FileOrganizer(config['paths'])
     dummy_audio_name = f"{episode_title}.mp3"
     episode_paths = file_organizer.get_episode_paths(dummy_audio_name)
     
     return episode_paths['input_folder']
+
+def progress_hook(d):
+    """Progress hook for yt-dlp downloads"""
+    if d['status'] == 'downloading':
+        if 'total_bytes' in d:
+            total = d['total_bytes']
+        elif 'total_bytes_estimate' in d:
+            total = d['total_bytes_estimate']
+        else:
+            total = None
+            
+        downloaded = d.get('downloaded_bytes', 0)
+        
+        if total:
+            # Update existing progress bar or create new one
+            if not hasattr(progress_hook, 'pbar'):
+                progress_hook.pbar = tqdm(
+                    total=total,
+                    unit='B',
+                    unit_scale=True,
+                    desc="Downloading audio"
+                )
+            
+            # Update progress
+            progress_hook.pbar.n = downloaded
+            progress_hook.pbar.refresh()
+        else:
+            # Handle unknown total size
+            if not hasattr(progress_hook, 'pbar_unknown'):
+                progress_hook.pbar_unknown = tqdm(
+                    unit='B',
+                    unit_scale=True,
+                    desc="Downloading audio"
+                )
+            
+            progress_hook.pbar_unknown.update(downloaded - getattr(progress_hook, 'last_downloaded', 0))
+            progress_hook.last_downloaded = downloaded
+            
+    elif d['status'] == 'finished':
+        # Close progress bar when download is complete
+        if hasattr(progress_hook, 'pbar'):
+            progress_hook.pbar.close()
+            delattr(progress_hook, 'pbar')
+        if hasattr(progress_hook, 'pbar_unknown'):
+            progress_hook.pbar_unknown.close()
+            delattr(progress_hook, 'pbar_unknown')
+        print(f"\n✓ Audio download completed: {d['filename']}")
 
 def download_audio(video_url_or_id):
     """Downloads the audio from a YouTube video using yt-dlp and saves it as MP3 directly to the episode Input folder."""
@@ -67,17 +115,14 @@ def download_audio(video_url_or_id):
         print(f"Validated input: {video_id}")
         if validation_result['warnings']:
             for warning in validation_result['warnings']:
-                print(f"Warning: {warning}")
-
-        # Get video title for the filename using yt-dlp
-        get_title_command = [
-            'yt-dlp',
-            '--get-title',
-            '--no-warnings',
-            normalized_url
-        ]
-        process = subprocess.run(get_title_command, capture_output=True, text=True, check=True, encoding='utf-8')
-        video_title = process.stdout.strip()
+                print(f"Warning: {warning}")        # Get video title for the filename using yt-dlp
+        with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+            try:
+                info = ydl.extract_info(normalized_url, download=False)
+                video_title = info.get('title', 'Unknown Title')
+            except Exception as e:
+                print(f"Warning: Could not extract video title: {e}")
+                video_title = f"Audio_{video_id}"
         
         # Get episode Input folder using the video title
         episode_input_folder = get_episode_input_folder(video_title)
@@ -92,23 +137,28 @@ def download_audio(video_url_or_id):
         print(f"Downloading audio for: {video_title}")
         print(f"Output will be saved to: {output_path_template}")
         
-        # Command to download and extract audio as MP3
-        # -x: extract audio
-        # --audio-format mp3: specify mp3 as the audio format
-        # -o "%(title)s.%(ext)s": output template for filename
-        # --no-warnings: suppress warnings
-        # --quiet: suppress console output from yt-dlp itself during download
-        command = [
-            'yt-dlp',
-            '-x', # Extract audio
-            '--audio-format', 'mp3',
-            '-o', output_path_template, # Use the full path for output
-            '--no-warnings',
-            '--quiet',
-            normalized_url
-        ]
+        # Reset progress bar for new download
+        if hasattr(progress_hook, 'pbar'):
+            progress_hook.pbar.close()
+            delattr(progress_hook, 'pbar')
+        if hasattr(progress_hook, 'pbar_unknown'):
+            progress_hook.pbar_unknown.close()
+            delattr(progress_hook, 'pbar_unknown')
         
-        subprocess.run(command, check=True)
+        # Configure yt-dlp options for audio extraction with progress hook
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': output_path_template,
+            'extractaudio': True,
+            'audioformat': 'mp3',
+            'progress_hooks': [progress_hook],
+            'quiet': True,
+            'no_warnings': True,
+        }
+        
+        # Download and extract audio using yt-dlp Python API
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([normalized_url])
         
         # yt-dlp creates the file directly, so we just confirm its existence
         # The downloaded_file_path is now output_path_template

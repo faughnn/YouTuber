@@ -27,20 +27,22 @@ Your goal is to weave these segments together into a masterclass of sarcastic an
 - **Always use the guest's actual name** - NEVER refer to them as "the guest"
 - **Keep it tight and impactful** - establish voice, theme, and guest credibility quickly
 
-### 2. CLIP SELECTION AND ORGANIZATION
+### 2. THEMATIC GROUPING AND NARRATIVE FLOW
 **Clip Selection Strategy:**
-- **Select the most outrageous clips** where Rogan demonstrates being uninformed, credulous, or promoting harmful ideas
-- **Prioritize clips that are hilariously absurd, clearly wrong, or dangerously consequential** - look for moments that make you think "I can't believe he just said that"
-- **You do NOT need to use all 20 segments** - pick only the clips that best showcase problematic behavior
-- **Focus on clear, specific harmful claims** that can be effectively deconstructed and fact-checked
-- **Quality over quantity**: Better to have fewer clips that are genuinely outrageous than more clips that are just mildly problematic
+- **You do NOT need to use all 20 segments** - select only the most impactful ones that best serve the narrative
+- **Prioritize clips that are hilariously absurd, dangerously consequential, or perfect teaching moments** - ideally all three. Look for clear, specific harmful claims that showcase multiple rhetorical strategies and can be effectively deconstructed without requiring extensive technical background. Focus on obvious contradictions, satisfying gotcha moments, or claims that are either demonstrably dangerous or absurdly wrong. Better to have fewer clips that make compelling points than more clips that feel like homework
+- **Quality over quantity**: Better to have fewer, well-analyzed clips than rushed coverage of many
+- **Hard transitions are acceptable**: If clip groups have completely different themes, a direct pivot is fine
 
-**Organization:**
-- **If clips naturally group by theme, organize them that way** (medical misinformation, conspiracy theories, etc.)
-- **If clips don't connect thematically, present them individually** - no need to force narrative connections
-- **Direct transitions are fine** - you can pivot between completely different topics without elaborate bridging
+**Analyze all 20 segments** for `narrativeSegmentTitle`, `primary_type`, and `potential_societal_impacts`, then:
+- **Group into logical thematic chapters** such as:
+  - *"Chapter 1: The 'Do Your Own Research' Medical School"* (Health/Medical misinformation)
+  - *"Chapter 2: The Supplement Salvation Army"* (Pseudoscience/wellness grifting)
+  - *"Chapter 3: Secret Handshakes and Shadowy Figures"* (Conspiracy theories)
+  - *"Chapter 4: Tearing It All Down for Clicks"* (Societal damage)
+- **Create a narrative arc** that escalates from absurd to genuinely dangerous
 
-### 3. CORE SEGMENT STRUCTURE
+### 3. CORE SEGMENT STRUCTURE (For Each Clip Used in the Narrative)
 
 #### A. PRE-CLIP SETUP
 - **Adjust duration based on video length and content density** - short clips need punchy setups, complex clips deserve more thorough preparation
@@ -49,10 +51,12 @@ Your goal is to weave these segments together into a masterclass of sarcastic an
 - **Use the guest's actual name** from `guest_name` - NEVER refer to them as "the guest"
 - **Prime the audience** on rhetorical strategies to listen for
 - **Keep setup focused and concise** - build anticipation efficiently
+- **Set snarky tone:** *"Next up, we have [GUEST_NAME], who stopped by to casually dismantle centuries of established medical science."*
 
 #### B. CLIP PRESENTATION
+- **Clearly indicate video placement:** *"Let's roll the video..."* or *"Watch this..."*
 - **Format the `suggestedClip` content** in blockquotes with speaker names and timestamps
-- **Present clips cleanly** without unnecessary transitions
+- **Ensure seamless integration** into the narrative flow
 
 #### C. POST-CLIP DECONSTRUCTION
 **Adjust analysis duration based on video length and content density** - aim for analysis time 1-3x the clip length depending on how much there is to unpack.
@@ -75,7 +79,6 @@ This is your **core performance moment:**
 - Explicitly reference `identified_rhetorical_strategies`
 - Weave in `potential_societal_impacts`
 - **Fact-check key claims**: Address obvious errors, provide missing context, and explain why complex scientific claims contradict established research using accessible language
-- **Assess context and intent**: If the `suggestedClip` content is clearly a joke or comedic bit (indicated by laughter, absurd premises, or obvious satirical tone), acknowledge this in your analysis. You can still discuss potential issues with the humor but treat it much less seriously than earnest harmful claims. Don't escalate obvious comedy to the same severity level as genuine misinformation
 
 **For Pseudoscience Content:**
 - Distinguish between "sounds scientific" and "actually scientific"
@@ -83,14 +86,14 @@ This is your **core performance moment:**
 - Address the "natural equals better" fallacy and supplement industry conflicts of interest
 - Highlight the difference between preliminary research and established scientific consensus
 
-**Connect When Natural:**
-- If clips share themes, note those connections
-- If clips are unrelated, treat them as standalone moments
-- Focus on making each individual clip analysis strong rather than forcing overall cohesion
+**Connect the Dots:**
+- Create smooth transitions between clips
+- Link themes across segments
+- Build cumulative impact
 
-### 4. CLOSING MONOLOGUE - **TARGET: 30s**
-- **Synthesize the types of problems** you've showcased across the selected clips
-- **Don't re-list clips** - focus on the patterns of misinformation or poor reasoning you've highlighted
+### 4. CLOSING MONOLOGUE ("So, What Now?" Outro) - **TARGET: 30s**
+- **Synthesize key themes** you've exposed
+- **Don't re-list clips** - synthesize the overarching narrative
 - **Keep it brief and conversational** in the host's snarky voice
 - **Avoid preachy, structured wrap-ups** that sound like lectures
 - **Avoid structured lists or step-by-step breakdowns** that sound artificial
@@ -135,12 +138,6 @@ This is your **core performance moment:**
 * Avoid using the same root word twice in close proximity, even in different forms or contexts
 * Replace one instance with a synonym to improve audio flow
 
-**Pronunciation Disambiguation:**
-* For words with multiple pronunciations, provide enough context for TTS to choose correctly
-* "Content" (material) vs "content" (happy): Use "material" "videos" "posts" or "media content" instead of standalone "content"
-* Other ambiguous words: "read" (present vs past), "live" (verb vs adjective), "lead" (metal vs guide)
-* When in doubt, use synonyms to avoid TTS confusion
-
 **Name Handling:**
 * Use maximum two names or titles per reference (e.g., "Doctor Bowden" or "Mary Bowden")
 * Avoid multi-part names that cause TTS stuttering
@@ -149,16 +146,10 @@ This is your **core performance moment:**
 **Script Variety:**
 * Don't start audio clip scripts with "Alright," - use varied transitions
 
-**Comedy and Context Recognition:**
-* If source clips contain obvious jokes or comedic content (indicated by laughter or absurd premises), acknowledge this context in your script
-* Treat clear comedy with appropriate lightness while still being able to critique problematic elements
-* Don't escalate obvious jokes to the same severity level as earnest harmful claims
-
 **Comma Usage:**
-* **NEVER use commas in script content** - they create unnatural TTS pauses
-* Break all sentences into shorter separate sentences instead of using commas
-* Rewrite any content that would normally require commas for clarity
-* Use periods to end sentences and start new ones rather than connecting with commas
+* Minimize commas to avoid unnatural TTS pauses
+* Break long sentences into shorter ones instead of using multiple commas
+* Keep commas only when essential for meaning
 
 **Meta-References:**
 * Don't refer to analysts, data flagging, or the script creation process
@@ -257,10 +248,9 @@ This is your **core performance moment:**
 4. **Quote Accuracy:** Any direct quotes attributed to the guest must be from the actual `suggestedClip` content - general commentary can reference broader context
 5. **Balance Entertainment and Education:** Make it engaging while delivering serious media literacy
 6. **Use Data Strategically:** Reference the analytical findings to support your commentary
-7. **Focus on Individual Clip Strength:** Each segment should be compelling on its own merits - connections between clips are nice but not required
+7. **Create Narrative Cohesion:** Each segment should build toward a larger understanding
 8. **Emphasize Real-World Impact:** Always connect the content to genuine societal consequences
 9. **Stay Factual:** Your snark should be grounded in verifiable information
-10. **Context Matters:** If source clips are clearly jokes or comedy bits, acknowledge this context. You can critique problematic humor without treating obvious jokes as seriously as earnest misinformation campaigns
 
 ---
 

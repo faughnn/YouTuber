@@ -5,7 +5,7 @@
 TEXT_TO_CONVERT = "Alright, 'at least 50%' of internet interactions are bots? That's a bold claim, even for the internet. While bot activity is certainly a concern, especially in political discourse and social media, the idea that half of all online engagement is non-human, pushing 'narratives' with 'no rules,' is a massive oversimplification that borders on fear-mongering. Reputable studies on bot activity, like those from the Pew Research Center or various cybersecurity firms, typically estimate bot traffic to be significant, but rarely, if ever, reaching 50% of *interactions* in a way that implies pervasive, malicious control over all discourse. Many bots are benign, like search engine crawlers or customer service bots. The claim that 'no rules' exist is also misleading; platforms have terms of service, and governments are increasingly looking into regulations. This kind of blanket statement fosters a deep, unhealthy distrust in all digital information, making it harder for people to discern legitimate news from actual propaganda. It's the digital equivalent of saying 'don't trust anyone,' which is great for paranoia, terrible for informed citizenship."
 
 # Speech Parameters
-EXAGGERATION = 0.8      # Emotion intensity (0.25-2.0)
+EXAGGERATION = 0.7      # Emotion intensity (0.25-2.0)
                         # 0.3-0.4: Professional, neutral
                         # 0.5: Default balanced  
                         # 0.7-0.8: More expressive

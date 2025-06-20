@@ -2,31 +2,32 @@ it should be clipping this whole thing
 
       "suggestedClip": [
         {
-          "timestamp": "1532.572",
-          "speaker": "SPEAKER_07 (Joe Rogan)",
-          "quote": "Because that's not a traditional vaccine. It's just not. They changed the definition for mRNA vaccine technology. Before that, it was not that. It was a very different thing."
+          "timestamp": "253.313",
+          "speaker": "SPEAKER_05 (Guest 1)",
+          "quote": "I didn't know the vaccine was gene therapy."
         },
         {
-          "timestamp": "1075.034",
-          "speaker": "SPEAKER_03 (Dr. Mary Talley Bowden)",
-          "quote": "And these things are technically gene therapy products. They're not vaccines."
+          "timestamp": "312.616",
+          "speaker": "SPEAKER_05 (Guest 1)",
+          "quote": "I didn't understand the difference of, oh, this is a dead pathogen, and this is a live pathogen, and we're worried about adjuvants, but this here, this is gene therapy."
         },
         {
-          "timestamp": "1077.058",
-          "speaker": "SPEAKER_07 (Joe Rogan)",
-          "quote": "Which is a real problem with using the same term. Why not use a new term? Well, because then you wouldn't be under the umbrella of protection. The vaccines currently enjoy where they can't be, which is so crazy."
+          "timestamp": "321.289",
+          "speaker": "SPEAKER_05 (Guest 1)",
+          "quote": "I didn't even begin to comprehend what that was, what it meant, or the fact that we would fuck around with something that was experimental and the scariest part."
         }
       ],
 
 
-but it only takes this bit
+video clipper left out this part
 
         {
-          "timestamp": "1532.572",
-          "speaker": "SPEAKER_07 (Joe Rogan)",
-          "quote": "Because that's not a traditional vaccine. It's just not. They changed the definition for mRNA vaccine technology. Before that, it was not that. It was a very different thing."
-        },
+          "timestamp": "321.289",
+          "speaker": "SPEAKER_05 (Guest 1)",
+          "quote": "I didn't even begin to comprehend what that was, what it meant, or the fact that we would fuck around with something that was experimental and the scariest part."
+        }
 
+        
 ## Investigation Findings
 
 ### Root Cause Analysis

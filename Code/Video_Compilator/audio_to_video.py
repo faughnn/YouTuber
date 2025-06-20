@@ -10,13 +10,16 @@ import logging
 from pathlib import Path
 from typing import Optional, Union, List
 import json
+import random
 
 # Video Standards (proven working)
 VIDEO_SPECS = {
     "width": 1920,
     "height": 1080,
     "fps": "29.97",
-    "codec": "libx264"
+    "codec": "libx264",
+    "random_backgrounds": True,  # New option
+    "background_change_points": ["post_clip"]  # Configurable
 }
 
 # Audio Standards (proven working)
@@ -27,16 +30,72 @@ AUDIO_SPECS = {
 }
 
 
+class ImageManager:
+    """Manages random background image selection for TTS segments"""
+    
+    def __init__(self, images_directory: str):
+        self.images_directory = Path(images_directory)
+        self.available_images = []
+        self.current_image = None
+        self.load_images()
+    
+    def load_images(self):
+        """Load all valid images from Chris Morris Images directory
+        Assumes all images are already properly upscaled to 1920x1080"""
+        if not self.images_directory.exists():
+            raise FileNotFoundError(f"Images directory not found: {self.images_directory}")
+
+        # Scan for .jpg, .png files (assuming all images are already properly upscaled)
+        image_extensions = ['.jpg', '.jpeg', '.png']
+        for ext in image_extensions:
+            self.available_images.extend(self.images_directory.glob(f'*{ext}'))
+            self.available_images.extend(self.images_directory.glob(f'*{ext.upper()}'))
+
+        if not self.available_images:
+            raise FileNotFoundError(f"No valid images found in {self.images_directory}")
+
+        # Set initial image to bloody_hell.jpg if available, otherwise first image
+        bloody_hell = self.images_directory / "bloody_hell.jpg"
+        if bloody_hell.exists():
+            self.current_image = bloody_hell
+        else:
+            self.current_image = self.available_images[0]
+
+        logging.getLogger(__name__).info(f"Loaded {len(self.available_images)} valid images from {self.images_directory}")
+    
+    def get_random_image(self):
+        """Select random image different from current from Chris Morris Images folder"""
+        if len(self.available_images) <= 1:
+            return self.current_image
+
+        # Get list of images excluding current one
+        available = [img for img in self.available_images if img != self.current_image]
+        selected_image = random.choice(available)
+        self.current_image = selected_image
+        return selected_image
+    
+    def set_image_for_sequence(self, segment_type: str):
+        """Update current image ONLY if segment_type is 'post_clip'
+        
+        Image change behavior:
+        - Changes ONLY at 'post_clip' segment starts
+        - Persists through entire sequence until next 'post_clip'
+        - Outro keeps the same image from last 'post_clip' (no new selection)
+        """
+        if segment_type == 'post_clip':
+            self.current_image = self.get_random_image()
+        # For all other segment types (intro, pre_clip, outro), keep current image
+        return self.current_image
+
+
 class AudioToVideoConverter:
-    """Convert TTS audio files to video segments with Chris Morris background image"""
+    """Convert TTS audio files to video segments with random Chris Morris background images"""
     
     def __init__(self):
-        self.background_image = r"C:\Users\nfaug\OneDrive - LIR\Desktop\YouTuber\Assets\Chris_Morris_Images\bloody_hell.jpg"
+        # Initialize image manager with Chris Morris Images folder
+        self.image_manager = ImageManager(
+            r"C:\Users\nfaug\OneDrive - LIR\Desktop\YouTuber\Assets\Chris_Morris_Images"        )
         self.logger = logging.getLogger(__name__)
-        
-        # Validate background image exists
-        if not Path(self.background_image).exists():
-            raise FileNotFoundError(f"Background image not found: {self.background_image}")
     
     def get_audio_duration(self, audio_path: Path) -> float:
         """Get the duration of an audio file using ffprobe"""
@@ -53,11 +112,17 @@ class AudioToVideoConverter:
             self.logger.error(f"Failed to get duration for {audio_path}: {e}")
             raise
     
-    def convert_audio_segment(self, audio_path: Path, output_path: Path) -> bool:
-        """Convert audio to video using Chris Morris background image
+    def convert_audio_segment(self, audio_path: Path, output_path: Path, segment_type: Optional[str] = None) -> bool:
+        """Enhanced method with segment-aware image selection from Chris Morris collection
+        
+        Args:
+            audio_path: Path to the input audio file
+            output_path: Path for the output video file
+            segment_type: Type of segment ('intro', 'pre_clip', 'post_clip', 'outro')
+                         Images change only at 'post_clip' segments
         
         Uses the exact proven method:
-        - Chris Morris "bloody hell" image as static background
+        - Random Chris Morris images as static background (changes only at post_clip)
         - 1920x1080 resolution standard
         - 29.97 fps matching video clips
         - 44.1kHz stereo audio standardization
@@ -67,17 +132,21 @@ class AudioToVideoConverter:
             if not audio_path.exists():
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
             
+            # Get appropriate background image based on segment type
+            background_image = self.image_manager.set_image_for_sequence(segment_type)
+            
             # Get audio duration
             duration = self.get_audio_duration(audio_path)
-            self.logger.info(f"Converting {audio_path.name} (duration: {duration:.2f}s) to video")
+            self.logger.info(f"Converting {audio_path.name} (duration: {duration:.2f}s) to video using {background_image.name}")
             
             # Create output directory if it doesn't exist
             output_path.parent.mkdir(parents=True, exist_ok=True)
-              # Build FFmpeg command using exact proven method with SAR fix
+            
+            # Build FFmpeg command using exact proven method with SAR fix
             command = [
                 'ffmpeg', '-y',
                 '-loop', '1',
-                '-i', str(self.background_image),
+                '-i', str(background_image),
                 '-i', str(audio_path),
                 '-c:v', VIDEO_SPECS["codec"],
                 '-c:a', AUDIO_SPECS["codec"],
