@@ -107,7 +107,7 @@ def example_direct_concatenation():
         
         # Validate inputs
         if concatenator.validate_concatenation_inputs(segments):
-            result = concatenator.concatenate_mixed_segments(segments, output_path)
+            result = concatenator.concatenate_segments(segments, output_path)
             
             if result.success:
                 print(f"✓ Concatenation successful: {result.output_path}")

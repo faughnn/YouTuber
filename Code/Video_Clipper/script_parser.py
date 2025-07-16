@@ -96,12 +96,12 @@ class UnifiedScriptParser:
             podcast_sections: List of podcast section dictionaries
             
         Returns:
-            List of VideoClipSpec objects for video clips
-        """
+            List of VideoClipSpec objects for video clips        """
         video_clips = []
         
         for section in podcast_sections:
-            if section.get('section_type') == 'video_clip':
+            # Support both video_clip and hook_clip section types
+            if section.get('section_type') in ['video_clip', 'hook_clip']:
                 try:
                     clip_spec = self._parse_video_clip_section(section)
                     if self.validate_clip_data(clip_spec):
@@ -303,3 +303,26 @@ class UnifiedScriptParser:
         secs = seconds % 60
         
         return f"{hours:02d}:{minutes:02d}:{secs:06.3f}"
+    
+    def detect_episode_version(self, podcast_sections: List[Dict]) -> str:
+        """Detect episode structure version for compatibility
+        
+        Args:
+            podcast_sections: List of podcast section dictionaries
+            
+        Returns:
+            Version string: 'v2_hook_structure', 'v1_intro_structure', or 'unknown'
+        """
+        if not podcast_sections:
+            return "unknown"
+            
+        first_section = podcast_sections[0]
+        section_type = first_section.get('section_type', '')
+        
+        if section_type == 'hook_clip':
+            return "v2_hook_structure"
+        elif section_type == 'intro':
+            return "v1_intro_structure"
+        else:
+            self.logger.warning(f"Unknown episode structure, first section type: {section_type}")
+            return "unknown"

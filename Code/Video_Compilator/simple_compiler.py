@@ -13,9 +13,131 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional, NamedTuple
 from dataclasses import dataclass
+import os
 
 from .audio_to_video import AudioToVideoConverter
 from .concat_orchestrator import DirectConcatenator, ConcatenationResult
+
+
+class EpisodeFileRegistry:
+    """Centralized file discovery and resolution for episode directories
+    
+    Scans episode directory once and provides O(1) file lookups by name or section ID.
+    Eliminates path duplication bugs by maintaining single source of truth for file locations.
+    """
+    
+    def __init__(self, episode_path: Path):
+        self.episode_path = Path(episode_path)
+        self.logger = logging.getLogger(f"{__name__}.EpisodeFileRegistry")
+        self.file_map = self._build_file_index()
+        self.logger.info(f"Registry initialized with {len(self.file_map)} files")
+    
+    def _build_file_index(self) -> Dict[str, Path]:
+        """Scan all relevant directories once and build filename -> absolute_path map"""
+        file_map = {}
+        
+        # Define search directories in priority order
+        search_dirs = [
+            self.episode_path / 'Output' / 'Audio',
+            self.episode_path / 'Output' / 'Video',
+            self.episode_path / 'Audio',
+            self.episode_path / 'Video'
+        ]
+        
+        for search_dir in search_dirs:
+            if search_dir.exists():
+                self.logger.debug(f"Scanning directory: {search_dir}")
+                for file_path in search_dir.rglob('*'):
+                    if file_path.is_file():
+                        filename = file_path.name
+                        # Only add if not already found (priority order)
+                        if filename not in file_map:
+                            file_map[filename] = file_path
+                            self.logger.debug(f"Registered: {filename} -> {file_path}")
+        
+        return file_map
+    
+    def resolve_file(self, identifier: str) -> Optional[Path]:
+        """Convert any identifier to actual file path
+        
+        Args:
+            identifier: Can be filename, section_id, or relative path
+            
+        Returns:
+            Absolute path to file if found, None otherwise
+        """
+        # Handle different input formats
+        identifier = str(identifier).replace('\\', '/').strip('/')
+        
+        # Case 1: Direct filename match
+        if identifier in self.file_map:
+            return self.file_map[identifier]
+        
+        # Case 2: Extract filename from path-like identifier
+        if '/' in identifier:
+            filename = Path(identifier).name
+            if filename in self.file_map:
+                return self.file_map[filename]
+        
+        # Case 3: Try as section_id with extensions (for audio files)
+        if not Path(identifier).suffix:  # No extension, treat as section_id
+            return self.find_audio_file(identifier)
+        
+        return None
+    
+    def find_audio_file(self, section_id: str) -> Optional[Path]:
+        """Find audio file with extension priority: .wav > .m4a > .mp3 > .aac"""
+        audio_extensions = ['.wav', '.m4a', '.mp3', '.aac']
+        
+        for ext in audio_extensions:
+            filename = f"{section_id}{ext}"
+            if filename in self.file_map:
+                return self.file_map[filename]
+        
+        return None
+    
+    def find_video_file(self, section_id: str) -> Optional[Path]:
+        """Find video file, typically .mp4"""
+        video_extensions = ['.mp4', '.mov', '.avi', '.mkv']
+        
+        for ext in video_extensions:
+            filename = f"{section_id}{ext}"
+            if filename in self.file_map:
+                return self.file_map[filename]
+        
+        return None
+    
+    def get_relative_path(self, file_path: Path) -> str:
+        """Convert absolute path back to episode-relative path"""
+        try:
+            return os.path.relpath(file_path, self.episode_path).replace('\\', '/')
+        except ValueError:
+            # Path is not relative to episode_path
+            return str(file_path)
+    
+    def list_files_by_pattern(self, pattern: str) -> List[Path]:
+        """List all files matching a pattern (e.g., 'pre_clip_*', '*.wav')"""
+        import fnmatch
+        matching_files = []
+        
+        for filename, file_path in self.file_map.items():
+            if fnmatch.fnmatch(filename, pattern):
+                matching_files.append(file_path)
+        
+        return sorted(matching_files)
+    
+    def get_file_stats(self) -> Dict[str, int]:
+        """Get statistics about discovered files"""
+        stats = {'total': len(self.file_map)}
+        
+        # Count by extension
+        for filename in self.file_map.keys():
+            ext = Path(filename).suffix.lower()
+            if ext:
+                key = f"{ext[1:]}_files"  # Remove the dot
+                stats[key] = stats.get(key, 0) + 1
+        
+        return stats
 
 
 @dataclass
@@ -37,6 +159,7 @@ class CompilationResult:
     file_size: Optional[int] = None
     segments_processed: int = 0
     audio_segments_converted: int = 0
+    segments_skipped: int = 0
     error: Optional[str] = None
 
 
@@ -47,10 +170,12 @@ class SimpleCompiler:
         self.keep_temp_files = keep_temp_files
         self.validate_segments = validate_segments
         self.logger = logging.getLogger(__name__)
-        
-        # Initialize components
+          # Initialize components
         self.audio_converter = AudioToVideoConverter()
         self.concatenator = DirectConcatenator()
+        
+        # File registry will be initialized per episode
+        self.file_registry: Optional[EpisodeFileRegistry] = None
     
     def parse_script(self, script_path: Path) -> List[SegmentInfo]:
         """Parse unified podcast script and identify segments
@@ -70,7 +195,12 @@ class SimpleCompiler:
             
             segments = []
             episode_path = script_path.parent.parent  # Go up from Scripts/ to episode directory
-              # Parse segments based on the script structure
+            
+            # Initialize file registry if not already done
+            if not self.file_registry:
+                self.file_registry = EpisodeFileRegistry(episode_path)
+            
+            # Parse segments based on the script structure
             if isinstance(script_data, dict):
                 # Handle unified podcast script structure
                 if 'podcast_sections' in script_data:
@@ -94,67 +224,55 @@ class SimpleCompiler:
                                 segment_list = value
                                 break
                 
-                # Process segments
+                # Process segments using registry
                 for i, segment_data in enumerate(segment_list):
                     if isinstance(segment_data, dict):
                         # Extract segment information
                         segment_id = segment_data.get('id', f'segment_{i+1:03d}')
                         segment_type = segment_data.get('type', 'unknown')
                         
-                        # Try to find file path
+                        # Try to find file path using registry
                         file_path = None
                         for path_key in ['file', 'path', 'filename', 'audio_file', 'video_file']:
                             if path_key in segment_data:
-                                file_path = segment_data[path_key]
-                                break
+                                identifier = segment_data[path_key]
+                                file_path = self.file_registry.resolve_file(identifier)
+                                if file_path:
+                                    break
+                        
+                        # If no file path found in segment data, try to resolve by segment_id
+                        if not file_path:
+                            if segment_type == 'audio' or segment_type == 'unknown':
+                                file_path = self.file_registry.find_audio_file(segment_id)
+                            elif segment_type == 'video':
+                                file_path = self.file_registry.find_video_file(segment_id)
                         
                         if file_path:
-                            # Convert to absolute path
-                            if not Path(file_path).is_absolute():
-                                # Try different possible locations
-                                possible_paths = [
-                                    episode_path / 'Audio' / file_path,
-                                    episode_path / 'Video' / file_path,
-                                    episode_path / 'Output' / 'Audio' / file_path,
-                                    episode_path / 'Output' / 'Video' / file_path,
-                                    episode_path / file_path
-                                ]
-                                
-                                actual_path = None
-                                for possible_path in possible_paths:
-                                    if possible_path.exists():
-                                        actual_path = possible_path
-                                        break
-                                
-                                if actual_path:
-                                    file_path = actual_path
-                                else:
-                                    self.logger.warning(f"Could not find file for segment {segment_id}: {file_path}")
-                                    continue
-                            else:
-                                file_path = Path(file_path)
-                            
-                            # Determine segment type from file extension if not specified
+                            # Determine segment type if unknown
                             if segment_type == 'unknown':
                                 if file_path.suffix.lower() in ['.mp3', '.wav', '.aac', '.m4a']:
                                     segment_type = 'audio'
                                 elif file_path.suffix.lower() in ['.mp4', '.avi', '.mov', '.mkv']:
                                     segment_type = 'video'
                             
+                            # Ensure metadata always contains section_type
+                            metadata = segment_data.get('metadata', segment_data)
                             segments.append(SegmentInfo(
                                 segment_id=segment_id,
                                 segment_type=segment_type,
                                 file_path=file_path,
                                 order=i,
-                                metadata=segment_data
+                                metadata=metadata
                             ))
+                            self.logger.debug(f"Found file for {segment_id}: {file_path}")
+                        else:
+                            self.logger.warning(f"Could not find file for segment {segment_id}")
             
             self.logger.info(f"Parsed {len(segments)} segments from script")
             for segment in segments:
                 self.logger.debug(f"  {segment.order}: {segment.segment_type} - {segment.file_path.name}")
             
-            return segments
-            
+            return segments            
         except Exception as e:
             self.logger.error(f"Failed to parse script {script_path}: {e}")
             raise
@@ -169,30 +287,31 @@ class SimpleCompiler:
         Returns:
             List of segment dictionaries in the correct order
         """
+        self.logger.info(f"[UPDATED] Parsing {len(podcast_sections)} podcast sections with intro_plus_hook_analysis support")
         segment_list = []
         
         for section in podcast_sections:
             section_type = section.get('section_type')
             section_id = section.get('section_id')
-            if section_type in ['intro', 'pre_clip', 'post_clip', 'outro']:
-                # Audio segment - map to corresponding audio file
-                audio_filename = f"{section_id}.wav"
+            self.logger.debug(f"Processing section: {section_id} with type: {section_type}")
+            if section_type in ['intro', 'intro_plus_hook_analysis', 'pre_clip', 'post_clip', 'outro']:
+                # Audio segment - use section_id to let registry find the file
+                self.logger.debug(f"Adding audio segment: {section_id}")
                 segment_list.append({
                     'id': section_id,
                     'type': 'audio',
-                    'file': audio_filename,
                     'metadata': section
                 })
-                
-            elif section_type == 'video_clip':
-                # Video segment - map to corresponding video file using section_id (e.g., video_clip_001.mp4)
-                video_filename = f"{section_id}.mp4"
+            elif section_type in ['video_clip', 'hook_clip']:
+                # Video segment - use section_id to let registry find the file
+                self.logger.debug(f"Adding video segment: {section_id}")
                 segment_list.append({
                     'id': section_id,
                     'type': 'video', 
-                    'file': video_filename,
                     'metadata': section
                 })
+            else:
+                self.logger.warning(f"Unknown section_type '{section_type}' for section '{section_id}' - skipping")
         
         self.logger.info(f"Parsed {len(segment_list)} segments from podcast_sections in correct order")
         return segment_list
@@ -211,9 +330,11 @@ class SimpleCompiler:
             audio_dir = episode_path / 'Audio'
         
         if audio_dir.exists():
-            audio_files = list(audio_dir.glob('*.wav')) + list(audio_dir.glob('*.mp3'))
+            audio_files = []
+            # Priority: .wav, .m4a, then others
+            for ext in ['*.wav', '*.m4a', '*.mp3', '*.aac']:
+                audio_files.extend(audio_dir.glob(ext))
             audio_files.sort()  # Sort alphabetically
-            
             for i, audio_file in enumerate(audio_files):
                 segments.append(SegmentInfo(
                     segment_id=f'audio_{i+1:03d}',
@@ -270,7 +391,19 @@ class SimpleCompiler:
             # Extract section_type from metadata for random image selection
             section_type = None
             if segment.metadata and isinstance(segment.metadata, dict):
-                section_type = segment.metadata.get('section_type')
+                section_type = segment.metadata.get('section_type')            # Fallback: infer section_type from filename if not present
+            if not section_type and segment.file_path:
+                fname = segment.file_path.name.lower()
+                if 'post_clip' in fname:
+                    section_type = 'post_clip'
+                elif 'pre_clip' in fname:
+                    section_type = 'pre_clip'
+                elif 'intro_plus_hook_analysis' in fname:
+                    section_type = 'intro_plus_hook_analysis'
+                elif 'intro' in fname:
+                    section_type = 'intro'
+                elif 'outro' in fname:
+                    section_type = 'outro'
             
             self.logger.info(f"Converting {segment.file_path.name} → {output_filename} (section_type: {section_type})")
             
@@ -307,9 +440,13 @@ class SimpleCompiler:
                     self.logger.error(f"Missing converted video for audio segment: {segment.segment_id}")
                     raise RuntimeError(f"Missing converted video for segment: {segment.segment_id}")
             elif segment.segment_type == 'video':
-                # Use original video file (UNTOUCHED!)
-                sequence.append(segment.file_path)
-                self.logger.debug(f"Sequence {len(sequence)}: Original Video - {segment.file_path.name}")
+                # Use original video file (UNTOUCHED!) - but check if it exists
+                if segment.file_path.exists():
+                    sequence.append(segment.file_path)
+                    self.logger.debug(f"Sequence {len(sequence)}: Original Video - {segment.file_path.name}")
+                else:
+                    self.logger.warning(f"Skipping missing video file: {segment.file_path}")
+                    self.logger.warning(f"Video segment {segment.segment_id} was not successfully extracted during Stage 6")
             else:
                 self.logger.warning(f"Unknown segment type '{segment.segment_type}' for segment {segment.segment_id}")
         
@@ -321,15 +458,20 @@ class SimpleCompiler:
         Args:
             episode_path: Path to episode directory
             output_filename: Optional custom output filename
-            
-        Returns:
+              Returns:
             CompilationResult with success status and metadata
         """
         try:
             episode_path = Path(episode_path)
             if not episode_path.exists():
                 raise FileNotFoundError(f"Episode directory not found: {episode_path}")
-            
+
+            # Initialize file registry for this episode
+            self.file_registry = EpisodeFileRegistry(episode_path)
+
+            # Set working directory to episode_path for correct relative path resolution
+            os.chdir(episode_path)
+
             self.logger.info(f"Starting compilation for episode: {episode_path.name}")
             
             # Step 1: Parse script and identify segments
@@ -369,15 +511,13 @@ class SimpleCompiler:
             if not output_filename:
                 output_filename = f"{episode_path.name}_compiled.mp4"
             
-            # Ensure Final directory exists
-            final_dir = episode_path / "Output" / "Video" / "Final"
-            final_dir.mkdir(parents=True, exist_ok=True)
-            output_path = final_dir / output_filename
+            # Save directly to episode root directory for easy access
+            output_path = episode_path / output_filename
               # Create debugging file with clip order before concatenation
-            self._create_clip_order_debug_file(final_dir, output_filename, segments, sequence, converted_audio_videos)
+            self._create_clip_order_debug_file(episode_path, output_filename, segments, sequence, converted_audio_videos)
             
             self.logger.info(f"Starting concatenation of {len(sequence)} segments...")
-            concat_result = self.concatenator.concatenate_mixed_segments(sequence, output_path)
+            concat_result = self.concatenator.concatenate_segments(sequence, output_path)
             
             # Cleanup temp files if requested
             if not self.keep_temp_files and temp_dir.exists():

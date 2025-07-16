@@ -1,0 +1,520 @@
+{% extends "base.html" %}
+
+{% block title %}Preset Management - YouTube Pipeline UI{% endblock %}
+
+{% block head %}
+<!-- Preset-specific styles -->
+<style>
+    .preset-card {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transform: translateZ(0); /* Enable hardware acceleration */
+    }
+    .preset-card:hover {
+        transform: translateY(-4px) scale(1.02);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    }
+    .preset-card:focus-within {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+    }
+    .preset-category-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .stage-indicator {
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-right: 0.25rem;
+        transition: all 0.2s ease;
+    }
+    .modal-backdrop {
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(8px);
+    }
+    .stats-card {
+        transition: all 0.2s ease;
+    }
+    .stats-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Responsive grid improvements */
+    @media (max-width: 640px) {
+        .preset-grid {
+            grid-template-columns: 1fr;
+        }
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    @media (min-width: 641px) and (max-width: 1024px) {
+        .preset-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    @media (min-width: 1025px) {
+        .preset-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+        .stats-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <!-- Enhanced Header Section -->
+        <div class="mb-8 fade-in">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="p-2 bg-indigo-100 rounded-lg">
+                            <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Workflow Presets</h1>
+                            <p class="mt-1 text-sm sm:text-base text-gray-600">Create, manage, and use workflow presets for streamlined pipeline execution</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Breadcrumb -->
+                    <nav class="flex" aria-label="Breadcrumb">
+                        <ol class="flex items-center space-x-2 text-sm">
+                            <li><a href="{{ url_for('main.index') }}" class="text-gray-500 hover:text-gray-700 transition-colors">Dashboard</a></li>
+                            <li><span class="text-gray-400">/</span></li>
+                            <li><span class="text-gray-900 font-medium">Presets</span></li>
+                        </ol>
+                    </nav>
+                </div>
+                
+                <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    <!-- Help Button -->
+                    <button type="button" 
+                            class="btn btn-secondary flex items-center justify-center gap-2 order-2 sm:order-1"
+                            onclick="window.uiEnhancements?.showHelp('presets')"
+                            aria-label="Show preset management help">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span class="hidden sm:inline">Help</span>
+                    </button>
+                    
+                    <!-- Create Preset Button -->
+                    <button type="button" 
+                            class="btn btn-primary flex items-center justify-center gap-2 order-1 sm:order-2"
+                            onclick="openCreatePresetModal()"
+                            aria-label="Create new workflow preset">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        <span>Create Preset</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+                <button id="import-preset-btn" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                    </svg>
+                    Import Preset
+                </button>
+                <button id="create-preset-btn" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    Create New Preset
+                </button>
+            </div>
+        </div>
+    </div>        <!-- Enhanced Statistics Section -->
+        <div class="stats-grid grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 fade-in">
+            <!-- Total Presets -->
+            <div class="stats-card bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-6" role="article" aria-labelledby="total-presets-title">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4 flex-1">
+                        <h3 id="total-presets-title" class="text-sm font-medium text-gray-500 uppercase tracking-wide">Total Presets</h3>
+                        <p id="total-presets" class="text-2xl font-bold text-gray-900 tabular-nums mt-1">{{ presets|length if presets else 0 }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Usage -->
+            <div class="stats-card bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-6" role="article" aria-labelledby="active-usage-title">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-gradient-to-br from-green-100 to-green-200 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4 flex-1">
+                        <h3 id="active-usage-title" class="text-sm font-medium text-gray-500 uppercase tracking-wide">Active Usage</h3>
+                        <p id="total-usage" class="text-2xl font-bold text-gray-900 tabular-nums mt-1">{{ stats.total_usage if stats else 0 }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Most Popular -->
+            <div class="stats-card bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-6" role="article" aria-labelledby="popular-preset-title">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4 flex-1">
+                        <h3 id="popular-preset-title" class="text-sm font-medium text-gray-500 uppercase tracking-wide">Most Popular</h3>
+                        <p id="most-used-preset" class="text-sm font-medium text-gray-900 mt-1 truncate">{{ stats.most_used_preset if stats else 'None' }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Categories Count -->
+            <div class="stats-card bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-6" role="article" aria-labelledby="categories-title">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4 flex-1">
+                        <h3 id="categories-title" class="text-sm font-medium text-gray-500 uppercase tracking-wide">Categories</h3>
+                        <p id="category-count" class="text-2xl font-bold text-gray-900 tabular-nums mt-1">{{ stats.category_count if stats else 0 }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+                            <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Most Used</dt>
+                            <dd id="most-used-preset" class="text-lg font-medium text-gray-900">-</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
+                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Categories</dt>
+                            <dd id="category-count" class="text-lg font-medium text-gray-900">-</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter and Search -->
+    <div class="mb-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0 sm:space-x-4">
+            <div class="flex-1 min-w-0">
+                <div class="relative rounded-md shadow-sm">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </div>
+                    <input type="text" id="search-presets" class="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md" placeholder="Search presets...">
+                </div>
+            </div>
+            <div class="flex space-x-3">
+                <select id="category-filter" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md">
+                    <option value="">All Categories</option>
+                    <option value="system">System</option>
+                    <option value="custom">Custom</option>
+                    <option value="template">Templates</option>
+                </select>
+                <select id="sort-presets" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md">
+                    <option value="name">Sort by Name</option>
+                    <option value="usage">Sort by Usage</option>
+                    <option value="created">Sort by Date Created</option>
+                    <option value="updated">Sort by Last Updated</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Presets Grid -->
+    <div id="presets-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Presets will be loaded here -->
+    </div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="hidden text-center py-12">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No presets found</h3>
+        <p class="mt-1 text-sm text-gray-500">Get started by creating your first workflow preset.</p>
+        <div class="mt-6">
+            <button type="button" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Create Your First Preset
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Preset Modal -->
+<div id="preset-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 modal-backdrop transition-opacity" aria-hidden="true"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <form id="preset-form">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                                Create New Preset
+                            </h3>
+                            <div class="mt-4 space-y-4">
+                                <!-- Preset Name -->
+                                <div>
+                                    <label for="preset-name" class="block text-sm font-medium text-gray-700">Preset Name</label>
+                                    <input type="text" id="preset-name" name="name" required class="mt-1 focus:ring-primary-500 focus:border-primary-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md" placeholder="Enter preset name">
+                                </div>
+
+                                <!-- Description -->
+                                <div>
+                                    <label for="preset-description" class="block text-sm font-medium text-gray-700">Description</label>
+                                    <textarea id="preset-description" name="description" rows="3" class="mt-1 focus:ring-primary-500 focus:border-primary-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md" placeholder="Enter preset description (optional)"></textarea>
+                                </div>
+
+                                <!-- Category -->
+                                <div>
+                                    <label for="preset-category" class="block text-sm font-medium text-gray-700">Category</label>
+                                    <select id="preset-category" name="category" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md">
+                                        <option value="custom">Custom</option>
+                                        <option value="template">Template</option>
+                                    </select>
+                                </div>
+
+                                <!-- Stage Selection -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Pipeline Stages</label>
+                                    <div class="space-y-2">
+                                        <div class="flex items-center">
+                                            <input id="stage-1" name="stages" type="checkbox" value="1" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded">
+                                            <label for="stage-1" class="ml-3 block text-sm text-gray-700">
+                                                <span class="stage-indicator bg-blue-100 text-blue-800">1</span>
+                                                Audio Extraction
+                                            </label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input id="stage-2" name="stages" type="checkbox" value="2" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded">
+                                            <label for="stage-2" class="ml-3 block text-sm text-gray-700">
+                                                <span class="stage-indicator bg-green-100 text-green-800">2</span>
+                                                Content Analysis
+                                            </label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input id="stage-3" name="stages" type="checkbox" value="3" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded">
+                                            <label for="stage-3" class="ml-3 block text-sm text-gray-700">
+                                                <span class="stage-indicator bg-yellow-100 text-yellow-800">3</span>
+                                                Segment Identification
+                                            </label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input id="stage-4" name="stages" type="checkbox" value="4" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded">
+                                            <label for="stage-4" class="ml-3 block text-sm text-gray-700">
+                                                <span class="stage-indicator bg-purple-100 text-purple-800">4</span>
+                                                Segment Selection
+                                            </label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input id="stage-5" name="stages" type="checkbox" value="5" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded">
+                                            <label for="stage-5" class="ml-3 block text-sm text-gray-700">
+                                                <span class="stage-indicator bg-indigo-100 text-indigo-800">5</span>
+                                                Audio Generation
+                                            </label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input id="stage-6" name="stages" type="checkbox" value="6" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded">
+                                            <label for="stage-6" class="ml-3 block text-sm text-gray-700">
+                                                <span class="stage-indicator bg-pink-100 text-pink-800">6</span>
+                                                Video Compilation
+                                            </label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input id="stage-7" name="stages" type="checkbox" value="7" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded">
+                                            <label for="stage-7" class="ml-3 block text-sm text-gray-700">
+                                                <span class="stage-indicator bg-red-100 text-red-800">7</span>
+                                                Final Output
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Segment Mode -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Segment Mode</label>
+                                    <div class="flex space-x-4">
+                                        <div class="flex items-center">
+                                            <input id="segment-auto" name="segment_mode" type="radio" value="auto" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300">
+                                            <label for="segment-auto" class="ml-3 block text-sm text-gray-700">Automatic</label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input id="segment-manual" name="segment_mode" type="radio" value="manual" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300">
+                                            <label for="segment-manual" class="ml-3 block text-sm text-gray-700">Manual</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Audio Method -->
+                                <div>
+                                    <label for="audio-method" class="block text-sm font-medium text-gray-700">Audio Method</label>
+                                    <select id="audio-method" name="audio_method" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md">
+                                        <option value="tts">Text-to-Speech (TTS)</option>
+                                        <option value="voice_clone">Voice Cloning</option>
+                                        <option value="manual">Manual Audio Import</option>
+                                    </select>
+                                </div>
+
+                                <!-- Output Settings -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Output Settings</label>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label for="output-format" class="block text-xs font-medium text-gray-500">Format</label>
+                                            <select id="output-format" name="output_format" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md">
+                                                <option value="mp4">MP4 Video</option>
+                                                <option value="json">JSON Data</option>
+                                                <option value="txt">Text Export</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label for="output-quality" class="block text-xs font-medium text-gray-500">Quality</label>
+                                            <select id="output-quality" name="output_quality" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md">
+                                                <option value="high">High</option>
+                                                <option value="standard">Standard</option>
+                                                <option value="low">Low</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        <div class="flex items-center">
+                                            <input id="include-subtitles" name="include_subtitles" type="checkbox" class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded">
+                                            <label for="include-subtitles" class="ml-3 block text-sm text-gray-700">Include Subtitles</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm">
+                        Create Preset
+                    </button>
+                    <button type="button" id="cancel-preset" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="delete-modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 modal-backdrop transition-opacity" aria-hidden="true"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900" id="delete-modal-title">
+                            Delete Preset
+                        </h3>
+                        <div class="mt-2">
+                            <p class="text-sm text-gray-500">
+                                Are you sure you want to delete "<span id="delete-preset-name" class="font-medium"></span>"? This action cannot be undone.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="button" id="confirm-delete" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm">
+                    Delete
+                </button>
+                <button type="button" id="cancel-delete" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notification Area -->
+<div id="notifications" class="fixed inset-0 flex items-end justify-center px-4 py-6 pointer-events-none sm:p-6 sm:items-start sm:justify-end z-50">
+    <div id="notification-container" class="max-w-sm w-full pointer-events-auto">
+        <!-- Notifications will be inserted here -->
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Preset Management JavaScript -->
+<script src="{{ url_for('static', filename='js/presets.js') }}"></script>
+{% endblock %}

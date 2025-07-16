@@ -1,0 +1,27 @@
+{
+  "metadata": {
+    "name": "API Test Preset",
+    "category": "custom",
+    "created_at": "2025-06-20T16:53:50.711740",
+    "updated_at": "2025-06-20T16:53:50.711740",
+    "version": "1.0",
+    "format_version": "5.1"
+  },
+  "configuration": {
+    "stage_selection": [
+      1,
+      2,
+      3
+    ],
+    "segment_mode": "auto",
+    "prompt_references": {
+      "content_analysis": "test.txt"
+    },
+    "audio_method": "tts",
+    "output_settings": {
+      "format": "mp4",
+      "quality": "high",
+      "include_subtitles": false
+    }
+  }
+}

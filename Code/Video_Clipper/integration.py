@@ -17,7 +17,7 @@ from .video_extractor import VideoClipExtractor
 
 def extract_clips_from_script(episode_dir: str, 
                              script_filename: str = "unified_podcast_script.json",
-                             start_buffer: float = 3.0,
+                             start_buffer: float = 0.0,
                              end_buffer: float = 0.0) -> Dict:
     """
     Main function called by master processor to extract video clips from script.
@@ -101,6 +101,7 @@ def extract_clips_from_script(episode_dir: str,
                 'success': True,
                 'clips_created': report.successful_clips,
                 'clips_failed': report.failed_clips,
+                'clips_skipped': report.skipped_clips,
                 'total_clips': report.total_clips,
                 'output_directory': str(output_dir),
                 'extraction_time': report.total_time,
@@ -112,6 +113,7 @@ def extract_clips_from_script(episode_dir: str,
                 'error': f'All {report.total_clips} clips failed to extract',
                 'clips_created': 0,
                 'clips_failed': report.failed_clips,
+                'clips_skipped': report.skipped_clips,
                 'total_clips': report.total_clips,
                 'output_directory': str(output_dir),
                 'errors': report.errors
@@ -155,6 +157,7 @@ def _save_extraction_summary(output_dir: Path, report) -> None:
             f.write(f"Total clips processed: {report.total_clips}\n")
             f.write(f"Successfully extracted: {report.successful_clips}\n")
             f.write(f"Failed extractions: {report.failed_clips}\n")
+            f.write(f"Skipped (already exist): {report.skipped_clips}\n")
             f.write(f"Success rate: {(report.successful_clips / report.total_clips * 100):.1f}%\n" if report.total_clips > 0 else "Success rate: 0%\n")
             f.write(f"Total processing time: {report.total_time:.2f} seconds\n")
             f.write(f"Output directory: {report.output_directory}\n\n")
@@ -163,11 +166,23 @@ def _save_extraction_summary(output_dir: Path, report) -> None:
                 f.write("Successfully Extracted Clips:\n")
                 f.write("-" * 30 + "\n")
                 for result in report.results:
-                    if result.success:
+                    if result.success and result.output_path in report.existing_files:
+                        # This was skipped (already existed)
+                        continue
+                    elif result.success:
                         f.write(f"✓ {result.clip_spec.section_id}: {result.clip_spec.title}\n")
                         f.write(f"  File: {Path(result.output_path).name}\n")
                         f.write(f"  Size: {result.file_size_bytes / 1024 / 1024:.2f} MB\n")
                         f.write(f"  Time: {result.extraction_time:.2f}s\n\n")
+            
+            if report.skipped_clips > 0:
+                f.write("Skipped Clips (Already Exist):\n")
+                f.write("-" * 30 + "\n")
+                for result in report.results:
+                    if result.success and result.output_path in report.existing_files:
+                        f.write(f"↻ {result.clip_spec.section_id}: {result.clip_spec.title}\n")
+                        f.write(f"  File: {Path(result.output_path).name}\n")
+                        f.write(f"  Size: {result.file_size_bytes / 1024 / 1024:.2f} MB\n\n")
             
             if report.failed_clips > 0:
                 f.write("Failed Extractions:\n")

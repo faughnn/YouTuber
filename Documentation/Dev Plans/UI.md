@@ -118,7 +118,7 @@ Based on `tts_podcast_narrative_prompt.txt`, the current prompt:
    - Save custom prompt variations
 
 2. **Prompt Categories**:
-   - **Analysis Prompts** (Stage 3):
+   - **Analysis Guidelines** (Stage 3):
      - Default Joe Rogan analysis rules
      - Custom analysis focus (medical, political, etc.)
      - Different severity thresholds

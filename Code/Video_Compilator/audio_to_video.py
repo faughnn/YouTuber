@@ -30,61 +30,41 @@ AUDIO_SPECS = {
 }
 
 
-class ImageManager:
-    """Manages random background image selection for TTS segments"""
+class SimpleImageManager:
+    """Manages background image selection for TTS segments"""
     
-    def __init__(self, images_directory: str):
-        self.images_directory = Path(images_directory)
-        self.available_images = []
-        self.current_image = None
-        self.load_images()
+    def __init__(self, assets_directory):
+        self.assets_directory = Path(assets_directory)
+        self.bloody_hell_path = self.assets_directory / "bloody_hell.jpg"
+        self.random_images = []
+        self.current_image = str(self.bloody_hell_path)  # Start with bloody_hell
+        self.load_random_images()
     
-    def load_images(self):
-        """Load all valid images from Chris Morris Images directory
-        Assumes all images are already properly upscaled to 1920x1080"""
-        if not self.images_directory.exists():
-            raise FileNotFoundError(f"Images directory not found: {self.images_directory}")
-
-        # Scan for .jpg, .png files (assuming all images are already properly upscaled)
-        image_extensions = ['.jpg', '.jpeg', '.png']
-        for ext in image_extensions:
-            self.available_images.extend(self.images_directory.glob(f'*{ext}'))
-            self.available_images.extend(self.images_directory.glob(f'*{ext.upper()}'))
-
-        if not self.available_images:
-            raise FileNotFoundError(f"No valid images found in {self.images_directory}")
-
-        # Set initial image to bloody_hell.jpg if available, otherwise first image
-        bloody_hell = self.images_directory / "bloody_hell.jpg"
-        if bloody_hell.exists():
-            self.current_image = bloody_hell
-        else:
-            self.current_image = self.available_images[0]
-
-        logging.getLogger(__name__).info(f"Loaded {len(self.available_images)} valid images from {self.images_directory}")
+    def load_random_images(self):
+        """Load all images except bloody_hell.jpg for random selection"""
+        image_extensions = {'.jpg', '.jpeg', '.png'}
+        self.random_images = [
+            str(img_path) for img_path in self.assets_directory.iterdir()
+            if img_path.suffix.lower() in image_extensions
+            and img_path.name != "bloody_hell.jpg"  # Exclude the intro image
+        ]
+        print(f"[DEBUG] Random images loaded (excluding bloody_hell.jpg): {self.random_images}")
+        if not self.random_images:
+            print(f"WARNING: No random images found in {self.assets_directory}")
+            # Fallback to bloody_hell if no other images available            self.random_images = [str(self.bloody_hell_path)]
     
-    def get_random_image(self):
-        """Select random image different from current from Chris Morris Images folder"""
-        if len(self.available_images) <= 1:
-            return self.current_image
-
-        # Get list of images excluding current one
-        available = [img for img in self.available_images if img != self.current_image]
-        selected_image = random.choice(available)
-        self.current_image = selected_image
-        return selected_image
-    
-    def set_image_for_sequence(self, segment_type: str):
-        """Update current image ONLY if segment_type is 'post_clip'
+    def get_image_for_segment(self, segment_type):
+        print(f"[DEBUG] get_image_for_segment called with segment_type: '{segment_type}'")
+        if segment_type == "intro" or segment_type == "intro_plus_hook_analysis":
+            # Both intro and intro_plus_hook_analysis ALWAYS use bloody_hell.jpg
+            self.current_image = str(self.bloody_hell_path)
+        elif segment_type == "post_clip":
+            # Post-clip gets a NEW random image
+            self.current_image = random.choice(self.random_images)
+            print(f"[DEBUG] post_clip: selected image {self.current_image}")
+        # For pre_clip, outro, and hook_clip: keep current_image (inherit from previous)
+        # Note: hook_clip sections should be video, not audio, so this shouldn't be called for them
         
-        Image change behavior:
-        - Changes ONLY at 'post_clip' segment starts
-        - Persists through entire sequence until next 'post_clip'
-        - Outro keeps the same image from last 'post_clip' (no new selection)
-        """
-        if segment_type == 'post_clip':
-            self.current_image = self.get_random_image()
-        # For all other segment types (intro, pre_clip, outro), keep current image
         return self.current_image
 
 
@@ -92,9 +72,9 @@ class AudioToVideoConverter:
     """Convert TTS audio files to video segments with random Chris Morris background images"""
     
     def __init__(self):
-        # Initialize image manager with Chris Morris Images folder
-        self.image_manager = ImageManager(
-            r"C:\Users\nfaug\OneDrive - LIR\Desktop\YouTuber\Assets\Chris_Morris_Images"        )
+        # Initialize with Chris Morris Images folder
+        assets_path = r"C:\Users\nfaug\OneDrive - LIR\Desktop\YouTuber\Assets\Chris_Morris_Images"
+        self.image_manager = SimpleImageManager(assets_path)
         self.logger = logging.getLogger(__name__)
     
     def get_audio_duration(self, audio_path: Path) -> float:
@@ -113,36 +93,15 @@ class AudioToVideoConverter:
             raise
     
     def convert_audio_segment(self, audio_path: Path, output_path: Path, segment_type: Optional[str] = None) -> bool:
-        """Enhanced method with segment-aware image selection from Chris Morris collection
-        
-        Args:
-            audio_path: Path to the input audio file
-            output_path: Path for the output video file
-            segment_type: Type of segment ('intro', 'pre_clip', 'post_clip', 'outro')
-                         Images change only at 'post_clip' segments
-        
-        Uses the exact proven method:
-        - Random Chris Morris images as static background (changes only at post_clip)
-        - 1920x1080 resolution standard
-        - 29.97 fps matching video clips
-        - 44.1kHz stereo audio standardization
-        """
+        """Convert audio to video with appropriate background image"""
         try:
-            # Ensure input audio file exists
             if not audio_path.exists():
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
-            
-            # Get appropriate background image based on segment type
-            background_image = self.image_manager.set_image_for_sequence(segment_type)
-            
-            # Get audio duration
+            # Use new image selection logic
+            background_image = self.image_manager.get_image_for_segment(segment_type)
             duration = self.get_audio_duration(audio_path)
-            self.logger.info(f"Converting {audio_path.name} (duration: {duration:.2f}s) to video using {background_image.name}")
-            
-            # Create output directory if it doesn't exist
+            self.logger.info(f"Converting {audio_path.name} (duration: {duration:.2f}s) to video using {Path(background_image).name}")
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Build FFmpeg command using exact proven method with SAR fix
             command = [
                 'ffmpeg', '-y',
                 '-loop', '1',
@@ -158,24 +117,17 @@ class AudioToVideoConverter:
                 '-shortest',
                 str(output_path)
             ]
-            
             self.logger.debug(f"Running command: {' '.join(command)}")
-            
-            # Execute FFmpeg command
             result = subprocess.run(
                 command,
                 capture_output=True,
                 text=True,
                 check=True
             )
-            
-            # Validate output file was created
             if not output_path.exists():
                 raise RuntimeError(f"Output file was not created: {output_path}")
-            
             self.logger.info(f"Successfully converted {audio_path.name} to {output_path.name}")
             return True
-            
         except subprocess.CalledProcessError as e:
             self.logger.error(f"FFmpeg failed for {audio_path}: {e.stderr}")
             return False
@@ -268,20 +220,16 @@ class AudioToVideoConverter:
 def main():
     """Test the AudioToVideoConverter with a sample audio file"""
     import sys
-    
-    # Set up logging
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    
     converter = AudioToVideoConverter()
-    
     if len(sys.argv) > 1:
         audio_path = Path(sys.argv[1])
         output_path = Path(sys.argv[1]).with_suffix('.mp4')
-        
-        success = converter.convert_audio_segment(audio_path, output_path)
+        segment_type = sys.argv[2] if len(sys.argv) > 2 else None
+        success = converter.convert_audio_segment(audio_path, output_path, segment_type)
         print(f"Conversion {'successful' if success else 'failed'}")
     else:
-        print("Usage: python audio_to_video.py <audio_file>")
+        print("Usage: python audio_to_video.py <audio_file> [segment_type]")
 
 
 if __name__ == "__main__":

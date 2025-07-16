@@ -2,6 +2,8 @@
 File Organization Utilities for Master Processor
 
 Provides file organization, path management, and cleanup functionality.
+This module is responsible for creating the standardized directory structure
+for each episode based on the provided host and guest names.
 """
 
 import os
@@ -12,7 +14,6 @@ from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 import logging
 
-
 class FileOrganizer:
     """Handles file organization and path management for the master processor."""
     def __init__(self, base_paths: Dict[str, str]):
@@ -20,12 +21,11 @@ class FileOrganizer:
         Initialize with base paths for different file types.
         
         Args:
-            base_paths: Dictionary with keys like 'episode_base', 'analysis_rules'
+            base_paths: Dictionary with keys like 'episode_base'.
         """
         self.base_paths = base_paths
         self.logger = logging.getLogger(__name__)
-        self.temp_files: List[str] = []  # Track temporary files for cleanup
-    
+
     def ensure_directory_exists(self, path: str) -> bool:
         """Ensure a directory exists, creating it if necessary."""
         try:
@@ -34,389 +34,97 @@ class FileOrganizer:
         except Exception as e:
             self.logger.error(f"Failed to create directory {path}: {e}")
             return False
-    def get_legacy_audio_output_path(self, filename: str) -> str:
-        """
-        DEPRECATED: Get episode-specific audio path instead.
-        Use get_audio_output_path() for new episode structure.
-        """
-        raise NotImplementedError("Legacy paths no longer supported. Use episode structure with get_audio_output_path()")
-    
-    def extract_channel_name(self, filename: str) -> str:
-        """Extract channel name from audio filename."""
-        # Remove file extension
-        base_name = os.path.splitext(filename)[0]
-        
-        # Common patterns for channel extraction
-        if "Joe Rogan Experience" in base_name:
-            return "Joe_Rogan_Experience"
-        elif "Lex Fridman" in base_name:
-            return "Lex_Fridman_Podcast"
-        elif "Tim Ferriss" in base_name:
-            return "Tim_Ferriss_Show"
-        else:
-            # Extract first part before episode number or dash
-            parts = base_name.split(' - ')
-            if len(parts) > 1:
-                return parts[0].replace(' ', '_')
-            else:
-                # Fallback: use first few words
-                words = base_name.split()[:3]
-                return '_'.join(words)
-    
-    def sanitize_filename(self, filename: str) -> str:
-        """Sanitize filename for filesystem compatibility."""
-        # Remove or replace problematic characters
-        replacements = {
-            ':': '',
-            '"': '',
-            "'": '',
-            '<': '',
-            '>': '',
-            '|': '',
-            '?': '',
-            '*': '',
-            '/': '_',
-            '\\': '_',
-            '  ': ' '  # Replace double spaces with single
-        }
-        
-        sanitized = filename
-        for old, new in replacements.items():
-            sanitized = sanitized.replace(old, new)        
-        return sanitized.strip()
-    def get_transcript_structure_paths(self, audio_filename: str) -> Tuple[str, str, str]:
-        """
-        Get the organized folder structure for transcripts using new Input/Processing/Output structure.
-        
-        Returns:
-            Tuple of (channel_folder, episode_folder, transcript_file_path)
-        """
-        # First, try to extract episode information from the directory path context
-        channel_name, episode_name = self.extract_channel_episode_from_path(audio_filename)
-        
-        if channel_name and episode_name:
-            # Use the existing directory structure
-            content_base = self.base_paths.get('episode_base', 'Content')
-            channel_folder = os.path.join(content_base, channel_name)
-            episode_folder = os.path.join(channel_folder, episode_name)
-        else:
-            # Fallback to filename-based extraction
-            base_name = os.path.splitext(os.path.basename(audio_filename))[0]
-            
-            # Extract channel name
-            channel_name = self.extract_channel_name(base_name)
-            
-            # Sanitize episode name
-            episode_name = self.sanitize_filename(base_name)
-            
-            # Build paths using new structure: Content/Series/Episode/Input/
-            content_base = self.base_paths.get('episode_base', 'Content')
-            channel_folder = os.path.join(content_base, channel_name)
-            episode_folder = os.path.join(channel_folder, episode_name)
-        
-        base_name = os.path.splitext(os.path.basename(audio_filename))[0]
-        input_folder = os.path.join(episode_folder, 'Input')
-        transcript_file = os.path.join(input_folder, f"{base_name}_full_transcript.json")
-        
-        # Ensure directories exist
-        self.ensure_directory_exists(input_folder)
-        
-        return channel_folder, episode_folder, transcript_file
-    def get_analysis_output_path(self, transcript_path: str) -> str:
-        """Get the analysis output path for a transcript file using new structure."""
-        # Get the episode folder from transcript path (remove Input folder and file)
-        transcript_dir = os.path.dirname(transcript_path)  # This is the Input folder
-        episode_dir = os.path.dirname(transcript_dir)  # This is the episode folder
-        
-        # Create Processing folder path
-        processing_dir = os.path.join(episode_dir, 'Processing')
-        self.ensure_directory_exists(processing_dir)
-        
-        # Generate analysis filename
-        transcript_base = os.path.splitext(os.path.basename(transcript_path))[0]
-        return os.path.join(processing_dir, f"{transcript_base}_analysis.txt")
-    
-    def validate_audio_file(self, file_path: str) -> Dict[str, any]:
-        """Validate an audio file."""
-        result = {
-            'valid': False,
-            'warnings': [],
-            'info': {}
-        }
-        
-        if not os.path.exists(file_path):
-            result['warnings'].append(f"File does not exist: {file_path}")
-            return result
-        
-        # Check file size
-        file_size = os.path.getsize(file_path)
-        if file_size == 0:
-            result['warnings'].append("File is empty")
-            return result
-        
-        if file_size < 1024:  # Less than 1KB
-            result['warnings'].append("File is very small (less than 1KB)")
-        
-        # Check file extension
-        valid_extensions = ['.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg']
-        file_ext = os.path.splitext(file_path)[1].lower()
-        
-        if file_ext not in valid_extensions:
-            result['warnings'].append(f"Unusual audio format: {file_ext}")
-        
-        # If we get here with no blocking warnings, it's valid
-        result['valid'] = True
-        result['info'] = {
-            'size_bytes': file_size,
-            'size_mb': file_size / (1024 * 1024),
-            'extension': file_ext,
-            'path': file_path
-        }
-        
-        return result
-    
-    def check_existing_outputs(self, input_path: str) -> Dict[str, any]:
-        """Check if outputs already exist for an input."""
-        result = {
-            'transcript_exists': False,
-            'analysis_exists': False,
-            'transcript_path': None,
-            'analysis_path': None
-        }
-        
-        try:
-            # Get expected paths
-            _, _, transcript_path = self.get_transcript_structure_paths(input_path)
-            analysis_path = self.get_analysis_output_path(transcript_path)
-            
-            # Check if files exist
-            if os.path.exists(transcript_path):
-                result['transcript_exists'] = True
-                result['transcript_path'] = transcript_path
-            
-            if os.path.exists(analysis_path):
-                result['analysis_exists'] = True
-                result['analysis_path'] = analysis_path
-                
-        except Exception as e:
-            self.logger.warning(f"Error checking existing outputs: {e}")
-        
-        return result
-    
-    def add_temp_file(self, file_path: str):
-        """Add a file to the temporary files list for cleanup."""
-        if file_path not in self.temp_files:
-            self.temp_files.append(file_path)
-    
-    def cleanup_temp_files(self):
-        """Clean up temporary files."""
-        for file_path in self.temp_files:
-            try:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                    self.logger.debug(f"Cleaned up temp file: {file_path}")
-            except Exception as e:
-                self.logger.warning(f"Failed to clean up temp file {file_path}: {e}")
-        
-        self.temp_files.clear()
-    
-    def create_processing_summary(self, results: Dict[str, str], session_id: str) -> str:
-        """Create a processing summary file."""
-        summary_data = {
-            'session_id': session_id,
-            'timestamp': time.time(),
-            'human_timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'results': results,
-            'file_sizes': {}
-        }
-        
-        # Add file size information
-        for key, path in results.items():
-            if os.path.exists(path):
-                summary_data['file_sizes'][key] = {
-                    'bytes': os.path.getsize(path),
-                    'mb': round(os.path.getsize(path) / (1024 * 1024), 2)
-                }
-        
-        # Save summary
-        if 'transcript_path' in results:
-            episode_dir = os.path.dirname(results['transcript_path'])
-            summary_path = os.path.join(episode_dir, f"processing_summary_{session_id}.json")
-            
-            try:
-                with open(summary_path, 'w', encoding='utf-8') as f:
-                    json.dump(summary_data, f, indent=2)
-                return summary_path
-            except Exception as e:
-                self.logger.warning(f"Failed to create processing summary: {e}")
-        
-        return None
-    def get_episode_input_folder(self, video_title: str) -> str:
-        """
-        Get the Input folder path for an episode based on video title.
-        Creates the necessary episode directory structure.
-        
-        Args:
-            video_title: The title of the video/episode
-            
-        Returns:
-            Path to the episode's Input folder
-        """
-        # Get episode structure using the video title as filename
-        dummy_filename = f"{video_title}.mp3"
-        _, episode_folder, _ = self.get_transcript_structure_paths(dummy_filename)
-        
-        # Return the Input folder path
-        input_folder = os.path.join(episode_folder, 'Input')
-        self.ensure_directory_exists(input_folder)
-        
-        return input_folder
 
-    def get_episode_paths(self, audio_filename: str) -> Dict[str, str]:
+    def sanitize_filename(self, filename: str) -> str:
+        """Sanitize a string to be a valid filename."""
+        if not filename:
+            return ""
+        # Replace spaces and problematic characters with an underscore
+        sanitized = filename.replace(' ', '_')
+        sanitized = "".join([c for c in sanitized if c.isalnum() or c in ('_', '-')]).rstrip()
+        return sanitized
+
+    def get_episode_paths(self, original_video_title: str, host_name: str, guest_name: str) -> Dict[str, str]:
         """
-        Get all standard paths for an episode using new Input/Processing/Output structure.
-        
+        Get all standard paths for an episode using the finalized host and guest names.
+        This is the primary method for creating the directory structure.
+
+        Args:
+            original_video_title (str): The original title of the video.
+            host_name (str): The finalized host/show name.
+            guest_name (str): The finalized guest name.
+
         Returns:
-            Dictionary with all standard episode paths
+            Dictionary with all standard episode paths.
         """
-        # Get base episode info
-        _, episode_folder, transcript_path = self.get_transcript_structure_paths(audio_filename)
+        sanitized_host = self.sanitize_filename(host_name)
+        sanitized_guest = self.sanitize_filename(guest_name)
         
+        # Create a descriptive episode folder name
+        if sanitized_guest and sanitized_guest != "No_Guest":
+            episode_folder_name = f"{sanitized_host}_{sanitized_guest}"
+        else:
+            # Fallback to using the sanitized original title if no guest
+            episode_folder_name = self.sanitize_filename(original_video_title)
+
+        content_base = self.base_paths.get('episode_base', 'Content')
+        
+        # Define the main episode folder
+        episode_folder = os.path.join(content_base, sanitized_host, episode_folder_name)
+
+        # Define all standard sub-folders and file paths
         paths = {
             'episode_folder': episode_folder,
             'input_folder': os.path.join(episode_folder, 'Input'),
             'processing_folder': os.path.join(episode_folder, 'Processing'),
-            'processing_logs_folder': os.path.join(episode_folder, 'Processing', 'Logs'),
             'output_folder': os.path.join(episode_folder, 'Output'),
-            'output_scripts_folder': os.path.join(episode_folder, 'Output', 'Scripts'),
-            'output_audio_folder': os.path.join(episode_folder, 'Output', 'Audio'),
-            'output_video_folder': os.path.join(episode_folder, 'Output', 'Video'),
-            'output_timelines_folder': os.path.join(episode_folder, 'Output', 'Timelines'),
-            'transcript_path': transcript_path
+            'scripts_folder': os.path.join(episode_folder, 'Output', 'Scripts'),
+            'audio_folder': os.path.join(episode_folder, 'Output', 'Audio'),
+            'video_folder': os.path.join(episode_folder, 'Output', 'Video'),
+            'timelines_folder': os.path.join(episode_folder, 'Output', 'Timelines'),
+            'original_audio': os.path.join(episode_folder, 'Input', 'original_audio.mp3'),
+            'original_video': os.path.join(episode_folder, 'Input', 'original_video.mp4'),
+            'transcript_path': os.path.join(episode_folder, 'Processing', 'transcript.json'),
+            'analysis_path': os.path.join(episode_folder, 'Processing', 'analysis.json'),
         }
         
         # Ensure all directories exist
-        for folder_path in paths.values():
-            if folder_path.endswith(('.json', '.txt', '.mp3', '.mp4')):                # It's a file path, create parent directory
-                self.ensure_directory_exists(os.path.dirname(folder_path))
-            else:
-                # It's a directory path
+        for key, folder_path in paths.items():
+            if 'folder' in key:
                 self.ensure_directory_exists(folder_path)
                 
         return paths
+
+# Example usage
+if __name__ == '__main__':
+    print("Running FileOrganizer example...")
+    # Define dummy base paths for testing
+    # In a real scenario, this would come from the main config
+    test_base_paths = {'episode_base': os.path.abspath('./Content')}
     
-    def get_podcast_script_output_path(self, transcript_path: str, script_name: str = "podcast_script") -> str:
-        """Get the podcast script output path in the Output/Scripts folder."""
-        # Get episode folder from transcript path
-        transcript_dir = os.path.dirname(transcript_path)  # Input folder
-        episode_dir = os.path.dirname(transcript_dir)  # Episode folder
-        
-        # Create Scripts output folder
-        scripts_output_dir = os.path.join(episode_dir, 'Output', 'Scripts')
-        self.ensure_directory_exists(scripts_output_dir)
-        
-        return os.path.join(scripts_output_dir, f"{script_name}.json")
+    organizer = FileOrganizer(test_base_paths)
+
+    # --- Test Case 1: With a guest ---
+    print("\n--- Test Case 1: With Guest ---")
+    title1 = "The Cool Podcast #123 - Dr. Jane Smith"
+    host1 = "The Cool Podcast"
+    guest1 = "Dr. Jane Smith"
     
-    def get_audio_output_path(self, transcript_path: str, audio_type: str = "original") -> str:
-        """Get audio file paths in Input (original) or Output/Audio (generated)."""
-        transcript_dir = os.path.dirname(transcript_path)  # Input folder
-        episode_dir = os.path.dirname(transcript_dir)  # Episode folder
-        
-        # Get base filename
-        base_name = os.path.splitext(os.path.basename(transcript_path))[0]
-        
-        if audio_type == "original":
-            # Original audio goes in Input folder
-            return os.path.join(transcript_dir, f"{base_name}.mp3")
-        else:
-            # Generated audio goes in Output/Audio folder
-            audio_output_dir = os.path.join(episode_dir, 'Output', 'Audio')
-            self.ensure_directory_exists(audio_output_dir)
-            return os.path.join(audio_output_dir, f"{base_name}_{audio_type}.mp3")
+    paths1 = organizer.get_episode_paths(title1, host1, guest1)
     
-    def get_video_paths(self, transcript_path: str) -> Dict[str, str]:
-        """Get video-related paths for an episode."""
-        transcript_dir = os.path.dirname(transcript_path)  # Input folder
-        episode_dir = os.path.dirname(transcript_dir)  # Episode folder
-        
-        # Get base filename
-        base_name = os.path.splitext(os.path.basename(transcript_path))[0]
-        
-        video_input_dir = transcript_dir  # Input folder
-        video_output_dir = os.path.join(episode_dir, 'Output', 'Video')
-        
-        self.ensure_directory_exists(video_output_dir)
-        
-        return {
-            'original_video': os.path.join(video_input_dir, f"{base_name}.mp4"),
-            'clips_folder': video_output_dir,
-            'final_video': os.path.join(video_output_dir, f"{base_name}_final.mp4")
-        }
-    
-    def extract_channel_episode_from_path(self, audio_path: str) -> Tuple[Optional[str], Optional[str]]:
-        """
-        Extract channel and episode information from the full directory path.
-        
-        This method analyzes the directory structure to identify if the audio file
-        is already in a proper episode structure and extracts the channel and episode names.
-        
-        Args:
-            audio_path: Full path to the audio file
-            
-        Returns:
-            Tuple of (channel_name, episode_name) or (None, None) if not found
-        """
-        try:
-            # Normalize path separators
-            normalized_path = os.path.normpath(audio_path)
-            path_parts = normalized_path.split(os.sep)
-            
-            # Look for Content directory in the path
-            content_index = -1
-            for i, part in enumerate(path_parts):
-                if part == 'Content':
-                    content_index = i
-                    break
-            
-            if content_index == -1:
-                return None, None
-            
-            # Path structure should be: .../Content/Channel/Episode/Input/audio.mp3
-            # So we need at least Content + Channel + Episode + Input + filename
-            if len(path_parts) < content_index + 5:
-                return None, None
-            
-            channel_name = path_parts[content_index + 1]
-            episode_name = path_parts[content_index + 2]
-            
-            # Validate that we're in the expected structure
-            expected_input_folder = path_parts[content_index + 3]
-            if expected_input_folder != 'Input':
-                return None, None
-            
-            # Check for known channel patterns to validate
-            if self._is_known_channel_pattern(channel_name, episode_name):
-                return channel_name, episode_name
-            
-            return None, None
-            
-        except (IndexError, AttributeError) as e:
-            self.logger.debug(f"Error extracting channel/episode from path {audio_path}: {e}")
-            return None, None
-    
-    def _is_known_channel_pattern(self, channel_name: str, episode_name: str) -> bool:
-        """Check if the channel and episode names match known patterns."""
-        # Check for Joe Rogan Experience pattern
-        if channel_name == "Joe_Rogan_Experience" and "Joe Rogan Experience" in episode_name:
-            return True
-        
-        # Check for other known patterns
-        if channel_name == "Lex_Fridman_Podcast" and "Lex Fridman" in episode_name:
-            return True
-            
-        if channel_name == "Tim_Ferriss_Show" and ("Tim Ferriss" in episode_name or "The Tim Ferriss Show" in episode_name):
-            return True
-        
-        # If channel name doesn't match episode content, it might be a generic structure
-        # that we should preserve if it follows the Content/Channel/Episode/Input pattern
-        return True  # For now, trust the directory structure if it's in the right format
+    print(f"Host: {host1}, Guest: {guest1}")
+    print(f"Episode Folder: {paths1['episode_folder']}")
+    print(f"Input Folder: {paths1['input_folder']}")
+    print(f"Original Video Path: {paths1['original_video']}")
+
+    # --- Test Case 2: No guest ---
+    print("\n--- Test Case 2: No Guest ---")
+    title2 = "A Solo Stream About Tech"
+    host2 = "My Tech Channel"
+    guest2 = "No Guest"
+
+    paths2 = organizer.get_episode_paths(title2, host2, guest2)
+    print(f"Host: {host2}, Guest: {guest2}")
+    print(f"Episode Folder: {paths2['episode_folder']}")
+    print(f"Input Folder: {paths2['input_folder']}")
+    print(f"Original Video Path: {paths2['original_video']}")

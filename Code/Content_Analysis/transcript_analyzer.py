@@ -44,6 +44,64 @@ logger = logging.getLogger(__name__)
 # Configuration
 API_KEY = "AIzaSyCsti0qnCEKOgzAnG_w41IfMNMxkyl3ysw"
 
+def extract_host_and_guest_names(file_path):
+    """
+    Extract host and guest names from folder structure.
+    
+    The folder format is ALWAYS: Content/{HOST}/{HOST}_{GUEST}/...
+    Example: C:/Users/nfaug/OneDrive - LIR/Desktop/YouTuber/Content/Tucker_Carlson/Tucker_Carlson_RFK_Jr
+    
+    Args:
+        file_path: Path to the transcript file or any file in the episode folder
+        
+    Returns:
+        tuple: (host_name, guest_name) with underscores replaced by spaces
+               Returns ("Unknown Host", "Unknown Guest") if parsing fails
+    """
+    try:
+        # Convert to forward slashes for consistent parsing
+        normalized_path = file_path.replace('\\', '/')
+        logger.info(f"Extracting names from path: {normalized_path}")
+        
+        # Find the Content folder and extract the structure after it
+        content_index = normalized_path.find('/Content/')
+        if content_index == -1:
+            logger.warning("Could not find '/Content/' in path")
+            return ("Unknown Host", "Unknown Guest")
+        
+        # Extract the part after Content/
+        path_after_content = normalized_path[content_index + 9:]  # 9 = len('/Content/')
+        path_parts = path_after_content.split('/')
+        
+        if len(path_parts) < 2:
+            logger.warning(f"Insufficient path parts after Content/: {path_parts}")
+            return ("Unknown Host", "Unknown Guest")
+        
+        # First part is host folder name
+        host_folder = path_parts[0]
+        # Second part is the host_guest combination
+        host_guest_folder = path_parts[1]
+        
+        logger.info(f"Host folder: {host_folder}, Host_Guest folder: {host_guest_folder}")
+        
+        # Extract guest name by removing the host prefix and underscore
+        if host_guest_folder.startswith(host_folder + '_'):
+            guest_part = host_guest_folder[len(host_folder) + 1:]  # +1 for the underscore
+            
+            # Format names by replacing underscores with spaces
+            host_name = host_folder.replace('_', ' ')
+            guest_name = guest_part.replace('_', ' ')
+            
+            logger.info(f"Extracted host: '{host_name}', guest: '{guest_name}'")
+            return (host_name, guest_name)
+        else:
+            logger.warning(f"Host_Guest folder '{host_guest_folder}' does not start with host folder '{host_folder}'")
+            return ("Unknown Host", "Unknown Guest")
+            
+    except Exception as e:
+        logger.error(f"Error extracting names from path: {e}")
+        return ("Unknown Host", "Unknown Guest")
+
 def retry_gemini_call(max_retries=5, base_delay=1, backoff_factor=2):
     """
     Decorator to retry Gemini API calls with exponential backoff.
@@ -523,7 +581,7 @@ def detect_episode_type_and_rules(transcript_file):
         normalized_path = os.path.normpath(transcript_file).lower()
         
         # Define rules directory
-        rules_dir = os.path.join(os.path.dirname(__file__), 'Rules')
+        rules_dir = os.path.join(os.path.dirname(__file__), 'Analysis_Guidelines')
         
         # Check for Joe Rogan Experience
         if 'joe_rogan_experience' in normalized_path or 'joe rogan experience' in normalized_path:
@@ -650,12 +708,28 @@ def upload_transcript_to_gemini(transcript_path, display_name):
         logger.error(f"Traceback: {traceback.format_exc()}")
         return None
 
-def create_file_based_prompt(analysis_rules):
+def create_file_based_prompt(analysis_rules, file_path=None):
     """Create clean analysis prompt without embedded transcript content."""
     logger.info("Creating file-based analysis prompt")
     
-    prompt = f"""
+    # Extract participant names if file_path is provided
+    participant_info = ""
+    if file_path:
+        host_name, guest_name = extract_host_and_guest_names(file_path)
+        participant_info = f"""
+## PARTICIPANT INFORMATION
 
+**Host Name:** {host_name}
+**Guest Name:** {guest_name}
+
+**CRITICAL INSTRUCTION:** Use "{host_name}" as the host's name and "{guest_name}" as the guest's name throughout your analysis. These are the authoritative names extracted from the folder structure.
+
+---
+
+"""
+    
+    prompt = f"""
+{participant_info}
 ANALYSIS RULES:
 {analysis_rules}
 
@@ -666,13 +740,13 @@ The transcript file contains a JSON structure with segments. Analyze the transcr
     return prompt
 
 @retry_gemini_call()
-def analyze_with_gemini_file_upload(file_object, analysis_rules, output_dir=None):
+def analyze_with_gemini_file_upload(file_object, analysis_rules, output_dir=None, file_path=None):
     """Analyze transcript using file upload method (REQUIRED to avoid safety blocks)."""
     logger.info("Starting Gemini analysis with file upload method (only supported method)")
     logger.info("This method avoids safety blocks by separating content from analysis instructions")
     try:
         # Create file-based prompt
-        prompt_text = create_file_based_prompt(analysis_rules)
+        prompt_text = create_file_based_prompt(analysis_rules, file_path)
         logger.info(f"Prompt length: {len(prompt_text)} characters")
         
         # Save the prompt to the episode's Processing folder if output_dir is provided
@@ -881,7 +955,7 @@ def main():
     # Step 2: Analyze using uploaded file
     print("🔍 Analyzing uploaded transcript...")
     output_dir = os.path.dirname(output_file)
-    analysis_result = analyze_with_gemini_file_upload(file_object, analysis_rules, output_dir)
+    analysis_result = analyze_with_gemini_file_upload(file_object, analysis_rules, output_dir, transcript_file)
     
     if not analysis_result:
         print("❌ Analysis failed")

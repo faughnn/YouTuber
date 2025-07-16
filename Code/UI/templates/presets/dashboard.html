@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Presets Management - YouTube Pipeline UI{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <!-- Page header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Workflow Presets</h1>
+        <p class="mt-2 text-gray-600">Create and manage reusable pipeline configurations for efficient content processing</p>
+    </div>
+
+    <!-- Coming Soon Notice -->
+    <div class="bg-purple-50 border border-purple-200 rounded-lg p-6 text-center">
+        <svg class="mx-auto h-12 w-12 text-purple-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 48 48">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4a2 2 0 012-2h8a2 2 0 012 2v2m-10 0h12m-12 0a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V8a2 2 0 00-2-2" />
+        </svg>
+        <h3 class="text-lg font-medium text-purple-800 mb-2">Preset Management System</h3>
+        <p class="text-purple-700 mb-4">The workflow preset management system will be implemented in Phase 5 of the development plan.</p>
+        <div class="text-sm text-purple-600">
+            <p><strong>Phase 5 Features:</strong></p>
+            <ul class="mt-2 text-left max-w-md mx-auto">
+                <li>• Custom workflow templates</li>
+                <li>• Preset configuration storage</li>
+                <li>• Quick pipeline setup</li>
+                <li>• Preset sharing and import</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Default Presets Preview -->
+    <div class="mt-8 bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Default Preset Templates</h3>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center mb-2">
+                        <div class="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                            <span class="text-blue-600 font-semibold text-sm">F</span>
+                        </div>
+                        <h4 class="font-medium text-gray-900">Full Pipeline</h4>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-2">Complete 7-stage processing</p>
+                    <div class="flex space-x-1">
+                        {% for i in range(1, 8) %}
+                            <div class="h-2 w-2 bg-blue-400 rounded-full" title="Stage {{ i }}"></div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center mb-2">
+                        <div class="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                            <span class="text-green-600 font-semibold text-sm">A</span>
+                        </div>
+                        <h4 class="font-medium text-gray-900">Audio Only</h4>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-2">Process through audio generation</p>
+                    <div class="flex space-x-1">
+                        {% for i in range(1, 6) %}
+                            <div class="h-2 w-2 bg-green-400 rounded-full" title="Stage {{ i }}"></div>
+                        {% endfor %}
+                        {% for i in range(6, 8) %}
+                            <div class="h-2 w-2 bg-gray-300 rounded-full" title="Stage {{ i }}"></div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center mb-2">
+                        <div class="h-8 w-8 bg-yellow-100 rounded-full flex items-center justify-center mr-3">
+                            <span class="text-yellow-600 font-semibold text-sm">S</span>
+                        </div>
+                        <h4 class="font-medium text-gray-900">Script Only</h4>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-2">Generate narrative script only</p>
+                    <div class="flex space-x-1">
+                        {% for i in range(1, 5) %}
+                            <div class="h-2 w-2 bg-yellow-400 rounded-full" title="Stage {{ i }}"></div>
+                        {% endfor %}
+                        {% for i in range(5, 8) %}
+                            <div class="h-2 w-2 bg-gray-300 rounded-full" title="Stage {{ i }}"></div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Phase 1 Foundation Complete -->
+    <div class="mt-8 bg-green-50 border border-green-200 rounded-lg p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-green-800">Foundation Ready</h3>
+                <div class="mt-2 text-sm text-green-700">
+                    <p>Route structure and template foundation established for preset management system.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

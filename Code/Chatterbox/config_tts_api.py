@@ -16,7 +16,7 @@ CFG_WEIGHT = 0.7        # Pace control (0.0-1.0)
                         # 0.5: Default pace
                         # 0.7-0.8: Faster speech
 
-TEMPERATURE = 0.3       # Sampling randomness (0.05-5.0)
+TEMPERATURE = 1       # Sampling randomness (0.05-5.0)
                         # 0.4-0.6: More consistent
                         # 0.8: Default balance
                         # 1.0+: More creative/random
@@ -40,7 +40,7 @@ ENABLE_AUDIO_VALIDATION = True      # Enable/disable audio quality checks
 MAX_RETRIES = 20                     # Maximum retry attempts for silent clips
 SILENCE_THRESHOLD_DB = -40          # dB threshold for silence detection (-50 to -20)
 MIN_SILENCE_DURATION_MS = 2000      # Minimum silence duration to trigger retry (milliseconds)
-MAX_SILENCE_RATIO = 0.1             # Maximum allowed ratio of silence to total audio (0.0-1.0)
+MAX_SILENCE_RATIO = 0.01             # Maximum allowed ratio of silence to total audio (0.0-1.0)
 
 # Silence detection explanation:
 # SILENCE_THRESHOLD_DB: -40dB is a good balance (quieter = more sensitive)

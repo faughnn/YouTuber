@@ -12,7 +12,7 @@ import time
 import json
 from typing import List, Dict, Optional
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
 from .script_parser import VideoClipSpec, UnifiedScriptParser
 
@@ -34,10 +34,12 @@ class ExtractionReport:
     total_clips: int
     successful_clips: int
     failed_clips: int
-    total_time: float
-    output_directory: str
-    results: List[ExtractionResult]
-    errors: List[str]
+    skipped_clips: int = 0
+    total_time: float = 0.0
+    output_directory: str = ""
+    results: List[ExtractionResult] = field(default_factory=list)
+    errors: List[str] = field(default_factory=list)
+    existing_files: List[str] = field(default_factory=list)
     
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization"""
@@ -45,12 +47,14 @@ class ExtractionReport:
             'total_clips': self.total_clips,
             'successful_clips': self.successful_clips,
             'failed_clips': self.failed_clips,
+            'skipped_clips': self.skipped_clips,
             'success_rate': f"{(self.successful_clips / self.total_clips * 100):.1f}%" if self.total_clips > 0 else "0%",
             'total_time_seconds': self.total_time,
             'total_time_formatted': f"{self.total_time:.2f}s",
             'output_directory': self.output_directory,
             'results': [asdict(result) for result in self.results],
             'errors': self.errors,
+            'existing_files': self.existing_files,
             'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
         }
 
@@ -70,7 +74,7 @@ class VideoClipExtractor:
         
         # Default configuration
         self.config = {
-            "start_buffer_seconds": 3.0,
+            "start_buffer_seconds": 0.0,
             "end_buffer_seconds": 0.0,
             "video_quality": {
                 "codec": "libx264",
@@ -120,6 +124,7 @@ class VideoClipExtractor:
         start_time = time.time()
         results = []
         errors = []
+        existing_files = []
         
         # Use provided buffers or config defaults
         if start_buffer is None:
@@ -157,6 +162,22 @@ class VideoClipExtractor:
         for i, clip in enumerate(clips, 1):
             self.logger.info(f"Processing clip {i}/{len(clips)}: {clip.section_id}")
             
+            # Check if clip already exists
+            output_path = output_dir / f"{clip.section_id}.mp4"
+            if output_path.exists():
+                self.logger.info(f"Clip already exists, skipping: {output_path}")
+                existing_files.append(str(output_path))
+                # Create a success result for the existing file
+                result = ExtractionResult(
+                    success=True,
+                    clip_spec=clip,
+                    output_path=str(output_path),
+                    extraction_time=0.0,
+                    file_size_bytes=output_path.stat().st_size if output_path.exists() else 0
+                )
+                results.append(result)
+                continue
+            
             try:
                 result = self.extract_single_clip(
                     video_path, clip, output_dir, start_buffer, end_buffer
@@ -188,25 +209,28 @@ class VideoClipExtractor:
         
         total_time = time.time() - start_time
         successful_count = sum(1 for r in results if r.success)
+        skipped_count = len(existing_files)
         
         report = ExtractionReport(
             total_clips=len(clips),
             successful_clips=successful_count,
             failed_clips=len(clips) - successful_count,
+            skipped_clips=skipped_count,
             total_time=total_time,
             output_directory=str(output_dir),
             results=results,
-            errors=errors
+            errors=errors,
+            existing_files=existing_files
         )
         
-        self.logger.info(f"Extraction completed: {successful_count}/{len(clips)} clips in {total_time:.2f}s")
+        self.logger.info(f"Extraction completed: {successful_count}/{len(clips)} clips in {total_time:.2f}s (skipped {skipped_count} existing)")
         return report
     
     def extract_single_clip(self, video_path: Path, clip: VideoClipSpec, 
                            output_dir: Path, start_buffer: float = 0.0,
                            end_buffer: float = 0.0) -> ExtractionResult:
         """
-        Extract a single video clip.
+        Extract a single video clip with retry logic for corrupted outputs.
         
         Args:
             video_path: Path to source video file
@@ -219,6 +243,8 @@ class VideoClipExtractor:
             ExtractionResult with detailed result information
         """
         start_time = time.time()
+        max_attempts = 3
+        last_error = None
         
         try:
             # Calculate actual start and end times with buffers
@@ -234,29 +260,51 @@ class VideoClipExtractor:
             # Generate output filename
             output_path = output_dir / f"{clip.section_id}.mp4"
             
-            # Build and execute FFmpeg command
-            success = self._execute_ffmpeg_extraction(
-                video_path, output_path, start_seconds, duration
-            )
+            # Attempt extraction with retry logic
+            for attempt in range(1, max_attempts + 1):
+                self.logger.debug(f"Extraction attempt {attempt}/{max_attempts} for {clip.section_id}")
+                
+                # Remove any existing file from previous attempt
+                if output_path.exists():
+                    try:
+                        output_path.unlink()
+                    except Exception as e:
+                        self.logger.warning(f"Could not remove existing file {output_path}: {e}")
+                
+                # Execute FFmpeg extraction
+                success = self._execute_ffmpeg_extraction(
+                    video_path, output_path, start_seconds, duration
+                )
+                
+                if success and output_path.exists():
+                    # Validate the extracted file
+                    if self._validate_video_file(output_path):
+                        file_size = output_path.stat().st_size
+                        extraction_time = time.time() - start_time
+                        self.logger.info(f"Successfully extracted {clip.section_id} on attempt {attempt}")
+                        return ExtractionResult(
+                            success=True,
+                            clip_spec=clip,
+                            output_path=str(output_path),
+                            extraction_time=extraction_time,
+                            file_size_bytes=file_size
+                        )
+                    else:
+                        last_error = f"Validation failed on attempt {attempt} - file appears corrupted"
+                        self.logger.warning(f"{last_error} for {clip.section_id}")
+                else:
+                    last_error = f"FFmpeg extraction failed on attempt {attempt}"
+                    self.logger.warning(f"{last_error} for {clip.section_id}")
             
+            # All attempts failed
             extraction_time = time.time() - start_time
-            
-            if success and output_path.exists():
-                file_size = output_path.stat().st_size
-                return ExtractionResult(
-                    success=True,
-                    clip_spec=clip,
-                    output_path=str(output_path),
-                    extraction_time=extraction_time,
-                    file_size_bytes=file_size
-                )
-            else:
-                return ExtractionResult(
-                    success=False,
-                    clip_spec=clip,
-                    error_message="FFmpeg extraction failed or output file not created",
-                    extraction_time=extraction_time
-                )
+            final_error = f"All {max_attempts} extraction attempts failed. Last error: {last_error}"
+            return ExtractionResult(
+                success=False,
+                clip_spec=clip,
+                error_message=final_error,
+                extraction_time=extraction_time
+            )
                 
         except Exception as e:
             return ExtractionResult(
@@ -265,6 +313,83 @@ class VideoClipExtractor:
                 error_message=str(e),
                 extraction_time=time.time() - start_time
             )
+
+    def _validate_video_file(self, video_path: Path) -> bool:
+        """
+        Validate that an extracted video file is not corrupted and can be read.
+        
+        Args:
+            video_path: Path to the video file to validate
+            
+        Returns:
+            True if file is valid, False if corrupted or unreadable
+        """
+        try:
+            # Check if file exists and has reasonable size
+            if not video_path.exists():
+                self.logger.debug(f"Validation failed: File does not exist: {video_path}")
+                return False
+            
+            file_size = video_path.stat().st_size
+            if file_size < 1024:  # Less than 1KB is likely corrupted
+                self.logger.debug(f"Validation failed: File too small ({file_size} bytes): {video_path}")
+                return False
+            
+            # Use FFmpeg to probe the file and check if it's readable
+            cmd = [
+                "ffprobe",
+                "-v", "quiet",
+                "-print_format", "json",
+                "-show_format",
+                "-show_streams",
+                str(video_path)
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30  # Shorter timeout for validation
+            )
+            
+            if result.returncode != 0:
+                self.logger.debug(f"Validation failed: FFprobe error for {video_path}: {result.stderr}")
+                return False
+            
+            # Parse the probe result
+            try:
+                probe_data = json.loads(result.stdout)
+                
+                # Check if we have format information
+                if 'format' not in probe_data:
+                    self.logger.debug(f"Validation failed: No format information in {video_path}")
+                    return False
+                
+                # Check if we have streams
+                if 'streams' not in probe_data or not probe_data['streams']:
+                    self.logger.debug(f"Validation failed: No streams found in {video_path}")
+                    return False
+                
+                # Check for video stream
+                has_video = any(stream.get('codec_type') == 'video' for stream in probe_data['streams'])
+                if not has_video:
+                    self.logger.debug(f"Validation failed: No video stream found in {video_path}")
+                    return False
+                
+                # If we get here, the file appears to be valid
+                self.logger.debug(f"Validation passed: {video_path}")
+                return True
+                
+            except json.JSONDecodeError as e:
+                self.logger.debug(f"Validation failed: Could not parse FFprobe output for {video_path}: {e}")
+                return False
+                
+        except subprocess.TimeoutExpired:
+            self.logger.debug(f"Validation failed: FFprobe timeout for {video_path}")
+            return False
+        except Exception as e:
+            self.logger.debug(f"Validation failed: Exception during validation of {video_path}: {e}")
+            return False
     
     def _execute_ffmpeg_extraction(self, video_path: Path, output_path: Path,
                                   start_seconds: float, duration: float) -> bool:
@@ -367,8 +492,10 @@ class VideoClipExtractor:
             total_clips=len(clips),
             successful_clips=0,
             failed_clips=len(clips),
+            skipped_clips=0,
             total_time=total_time,
             output_directory=str(output_dir),
             results=results,
-            errors=errors
+            errors=errors,
+            existing_files=[]
         )

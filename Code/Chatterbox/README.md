@@ -53,7 +53,7 @@ The module uses a comprehensive configuration system defined in `config.py`:
 
 ### ChatterboxParameters
 - `exaggeration`: 0.7 (optimal tested value)
-- `temperature`: 0.1 (optimal tested value)  
+- `temperature`: 0.5 (optimal tested value)  
 - `cfg_weight`: 0.7 (optimal tested value)
 
 ### ChatterboxConfig

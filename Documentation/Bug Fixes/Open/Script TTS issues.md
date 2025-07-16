@@ -1,1 +1,0 @@
-Didn't get the right background for the guest. They're FBI director and gemini didn't figure that out from searching the internet like i asked (perhaps get it to check the transcript?)

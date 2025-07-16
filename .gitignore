@@ -7,6 +7,10 @@
 # Exclude entire Content folder
 Content/
 
+# Exclude APM and Assets folders
+APM/
+Assets/
+
 # Exclude configuration files with sensitive data
 Code/Config/default_config.yaml
 config/

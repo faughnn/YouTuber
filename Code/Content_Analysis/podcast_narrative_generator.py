@@ -47,15 +47,8 @@ class NarrativeCreatorGenerator:
         """Initialize the narrative generator with API configuration."""
         self.api_key = "AIzaSyCsti0qnCEKOgzAnG_w41IfMNMxkyl3ysw"  # From transcript_analyzer.py
         self.model_name = "gemini-2.5-pro-preview-06-05"  # Fixed model name
-        self.prompt_file = os.path.join(
-            current_dir, 'Prompts', 'tts_podcast_narrative_prompt.txt'
-        )
-        
         # Initialize Gemini API
         self._configure_gemini()
-        
-        # Load prompt template
-        self.prompt_template = self._load_prompt_template()
         
         logger.info("NarrativeCreatorGenerator initialized successfully")
     
@@ -74,10 +67,10 @@ class NarrativeCreatorGenerator:
             logger.error(f"Error configuring Gemini API: {e}")
             return False
     
-    def _load_prompt_template(self) -> str:
+    def _load_prompt_template(self, prompt_file_path: str) -> str:
         """Load the prompt template from file."""
         try:
-            with open(self.prompt_file, 'r', encoding='utf-8') as f:
+            with open(prompt_file_path, 'r', encoding='utf-8') as f:
                 template = f.read()
             logger.info(f"Loaded prompt template: {len(template)} characters")
             return template
@@ -126,19 +119,159 @@ class NarrativeCreatorGenerator:
             
             if uploaded_file.state.name == "FAILED":
                 raise Exception("File processing failed")
-            
             logger.info("File processing completed successfully")
             return uploaded_file
         except Exception as e:
             logger.error(f"CRITICAL: File upload to Gemini failed: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             return None
+    def _extract_guest_name_from_title(self, episode_title: str) -> str:
+        """
+        Extract guest name from folder structure.
+        
+        Args:
+            episode_title: Episode title (usually folder name) from master processor
+            
+        Returns:
+            str: Extracted guest name or "Unknown Guest"
+        """
+        try:
+            # Use the folder structure to extract names
+            host_name, guest_name = self._extract_host_and_guest_names_from_path(episode_title)
+            logger.info(f"Extracted guest name from folder structure: {guest_name}")
+            return guest_name
+        except Exception as e:
+            logger.error(f"Error extracting guest name: {e}")
+            return "Unknown Guest"
+        for pattern in folder_patterns:
+            match = re.search(pattern, episode_title)
+            if match:
+                if pattern.startswith("Tucker_Carlson"):
+                    # For Tucker Carlson format, extract the guest name after "Tucker_Carlson_"
+                    guest_string = match.group(1).strip()
+                    logger.info(f"Extracted guest string using Tucker Carlson pattern: {guest_string}")
+                    return self._parse_multiple_guests(guest_string)
+                elif len(match.groups()) == 3:
+                    # For three-part format, assume middle part is host, last part is guest
+                    guest_string = match.group(3).strip()
+                    logger.info(f"Extracted guest string using three-part pattern: {guest_string}")
+                    return self._parse_multiple_guests(guest_string)
+                elif len(match.groups()) == 2:
+                    # For two-part format, assume second part is guest
+                    guest_string = match.group(2).strip()
+                    logger.info(f"Extracted guest string using two-part pattern: {guest_string}")
+                    return self._parse_multiple_guests(guest_string)
+        
+        # Fallback to YouTube title patterns
+        youtube_patterns = [
+            r"Joe Rogan Experience #\d+ - (.+)",  # JRE format: "Joe Rogan Experience #2325 - Aaron Rodgers"
+            r"(.+) #\d+ - (.+)",                  # General format with episode number
+            r"(.+) - (.+)",                       # Simple dash format
+            r"(.+) with (.+)",                    # "with" format
+            r"(.+): (.+)"                         # Colon format
+        ]
+        
+        for pattern in youtube_patterns:
+            match = re.search(pattern, episode_title)
+            if match:
+                # For JRE format, return the guest name after the dash
+                if "Joe Rogan Experience" in pattern:
+                    guest_string = match.group(1).strip()
+                    logger.info(f"Extracted guest string using JRE pattern: {guest_string}")
+                    return self._parse_multiple_guests(guest_string)
+                # For other formats, return the second group (assuming it's the guest)
+                else:
+                    guest_string = match.group(2).strip()
+                    logger.info(f"Extracted guest string using YouTube pattern: {guest_string}")
+                    return self._parse_multiple_guests(guest_string)
+        
+        logger.warning(f"Could not extract guest name from title: {episode_title}")
+        return "Unknown Guest"
     
+    def _parse_multiple_guests(self, guest_string: str) -> str:
+        """
+        Parse a guest string that may contain multiple guests and format appropriately.
+        
+        Args:
+            guest_string: Raw guest string extracted from title
+            
+        Returns:
+            str: Properly formatted guest name(s)
+        """
+        import re
+        
+        # Common separators for multiple guests
+        separators = [
+            r'\s+&\s+',           # " & "
+            r'\s+and\s+',         # " and "
+            r',\s+and\s+',        # ", and "
+            r',\s+',              # ", "
+            r'\s+with\s+',        # " with "
+        ]
+        
+        # Try to split on common separators
+        guests = [guest_string]  # Start with the whole string
+        
+        for separator in separators:
+            if re.search(separator, guest_string):
+                guests = re.split(separator, guest_string)
+                break
+        
+        # Clean up each guest name
+        cleaned_guests = []
+        for guest in guests:
+            cleaned = guest.strip()
+            # Remove common prefixes/suffixes that might indicate roles
+            cleaned = re.sub(r'^(Dr\.?|Professor|Prof\.?|Mr\.?|Ms\.?|Mrs\.?)\s+', '', cleaned)
+            if cleaned:
+                cleaned_guests.append(cleaned)
+        
+        if len(cleaned_guests) == 1:
+            logger.info(f"Single guest identified: {cleaned_guests[0]}")
+            return cleaned_guests[0]
+        elif len(cleaned_guests) == 2:
+            result = f"{cleaned_guests[0]} and {cleaned_guests[1]}"
+            logger.info(f"Two guests identified: {result}")
+            return result
+        elif len(cleaned_guests) > 2:
+            # For 3+ guests: "Name1, Name2, and Name3"
+            result = ", ".join(cleaned_guests[:-1]) + f", and {cleaned_guests[-1]}"
+            logger.info(f"Multiple guests identified: {result}")
+            return result
+        else:
+            logger.warning(f"Could not parse guests from: {guest_string}")
+            return guest_string
+
     def _build_unified_prompt(self, episode_title: str, custom_instructions: str = "") -> str:
         """Build the unified prompt that references the uploaded analysis file."""
         logger.info("Building unified narrative prompt")
-        # The template does not use any format placeholders, so just return it directly
-        formatted_prompt = self.prompt_template
+        
+        # Extract both host and guest names from episode title (folder structure)
+        host_name = self._extract_host_name_from_title(episode_title)
+        guest_name = self._extract_guest_name_from_title(episode_title)
+        logger.info(f"Extracted host name: {host_name} and guest name: {guest_name} from episode title: {episode_title}")
+        
+        # Inject episode context at the beginning of the prompt
+        episode_context = f"""
+## EPISODE CONTEXT
+
+**Episode Title:** {episode_title}
+**Host Name:** {host_name}
+**Guest Name:** {guest_name}
+
+**CRITICAL INSTRUCTION:** Use "{host_name}" as the host's name and "{guest_name}" as the guest's name throughout your script. Do NOT try to research or infer different participant names from the analysis data. These are the authoritative names extracted from the folder structure.
+
+---
+
+"""
+        
+        # Combine episode context with the original prompt template
+        formatted_prompt = episode_context + self.prompt_template
+        
+        # Add custom instructions if provided
+        if custom_instructions.strip():
+            formatted_prompt += f"\n\n## ADDITIONAL INSTRUCTIONS\n{custom_instructions}\n"
+        
         logger.info(f"Unified prompt created: {len(formatted_prompt)} characters")
         return formatted_prompt
     
@@ -205,10 +338,13 @@ class NarrativeCreatorGenerator:
                 
             # Validate each section has required fields based on section type
             for i, section in enumerate(sections):
-                section_type = section.get('section_type')
+                section_type = section.get('section_type')                # Check section_type is valid (supporting both old and new structures)
+                old_types = ['intro', 'pre_clip', 'video_clip', 'post_clip', 'outro']
+                new_types = ['hook_clip', 'intro_plus_hook_analysis', 'pre_clip', 'video_clip', 'post_clip', 'outro']
+                valid_types = old_types + new_types
+                # Remove duplicates while preserving order
+                valid_types = list(dict.fromkeys(valid_types))
                 
-                # Check section_type is valid
-                valid_types = ['intro', 'pre_clip', 'video_clip', 'post_clip', 'outro']
                 if section_type not in valid_types:
                     logger.error(f"Invalid section_type: {section_type}")
                     return False
@@ -219,9 +355,8 @@ class NarrativeCreatorGenerator:
                     if key not in section:
                         logger.error(f"Section {i} missing required key: {key}")
                         return False
-                
-                # Section-specific required fields
-                if section_type == 'video_clip':
+                  # Section-specific required fields
+                if section_type in ['video_clip', 'hook_clip']:
                     video_clip_keys = ['clip_id', 'start_time', 'end_time', 'title', 'selection_reason', 
                                      'severity_level', 'key_claims', 'suggestedClip']
                     for key in video_clip_keys:
@@ -245,13 +380,20 @@ class NarrativeCreatorGenerator:
                         for key in clip_required_keys:
                             if key not in clip_entry:
                                 logger.error(f"Video clip section {i}, suggestedClip entry {j} missing key: {key}")
-                                return False
-                
+                                return False                
                 elif section_type in ['intro', 'outro']:
                     # Intro and outro sections require script_content
                     if 'script_content' not in section:
                         logger.error(f"{section_type} section {i} missing required key: script_content")
                         return False
+                
+                elif section_type == 'intro_plus_hook_analysis':
+                    # intro_plus_hook_analysis requires script_content and hook_clip_reference
+                    required_keys = ['script_content', 'hook_clip_reference']
+                    for key in required_keys:
+                        if key not in section:
+                            logger.error(f"{section_type} section {i} missing required key: {key}")
+                            return False
                 
                 elif section_type in ['pre_clip', 'post_clip']:
                     # Pre-clip and post-clip sections require script_content and clip_reference
@@ -260,11 +402,16 @@ class NarrativeCreatorGenerator:
                         if key not in section:
                             logger.error(f"{section_type} section {i} missing required key: {key}")
                             return False
-            
-            # Check metadata structure
+              # Check metadata structure
             metadata = script_data.get('script_metadata', {})
             required_metadata_keys = ['total_estimated_duration', 'target_audience', 'key_themes', 
                                     'total_clips_analyzed', 'tts_segments_count', 'timeline_ready']
+            
+            # Check if this is the new structure with hook_clip
+            has_hook_clip = any(section.get('section_type') == 'hook_clip' for section in sections)
+            if has_hook_clip:
+                required_metadata_keys.append('hook_clip_id')
+            
             for key in required_metadata_keys:
                 if key not in metadata:
                     logger.error(f"Missing metadata key: {key}")
@@ -292,7 +439,7 @@ class NarrativeCreatorGenerator:
             return False
     
     def generate_unified_narrative(self, analysis_json_path: str, episode_title: str, 
-                                 custom_instructions: str = "") -> Dict:
+                                 narrative_format: str, custom_instructions: str = "") -> Dict:
         """
         Generate unified narrative script-timeline structure from analysis data.
         
@@ -316,6 +463,19 @@ class NarrativeCreatorGenerator:
                 if not uploaded_file:
                     raise Exception("File upload failed")
                 
+                # Determine which prompt file to use based on narrative_format
+                if narrative_format == "with_hook":
+                    prompt_file_name = 'tts_podcast_narrative_prompt.txt'
+                elif narrative_format == "without_hook":
+                    prompt_file_name = 'tts_podcast_narrative_prompt_WITHOUT_HOOK.txt'
+                else:
+                    raise ValueError(f"Invalid narrative format: {narrative_format}")
+
+                prompt_file_path = os.path.join(
+                    current_dir, 'Generation_Templates', prompt_file_name
+                )
+                self.prompt_template = self._load_prompt_template(prompt_file_path)
+
                 # Step 2: Build unified prompt
                 prompt_text = self._build_unified_prompt(episode_title, custom_instructions)
                 
@@ -435,6 +595,110 @@ class NarrativeCreatorGenerator:
             
         except Exception as e:
             logger.error(f"Failed to save debug files: {e}")
+    def _extract_host_name_from_title(self, episode_title: str) -> str:
+        """
+        Extract host name from folder structure.
+        
+        Args:
+            episode_title: Episode title (usually folder name) from master processor
+            
+        Returns:
+            str: Extracted host name or "Unknown Host"
+        """
+        try:
+            # Use the folder structure to extract names
+            host_name, guest_name = self._extract_host_and_guest_names_from_path(episode_title)
+            logger.info(f"Extracted host name from folder structure: {host_name}")
+            return host_name
+        except Exception as e:
+            logger.error(f"Error extracting host name: {e}")
+            return "Unknown Host"
+    
+    def _extract_host_and_guest_names_from_path(self, episode_title: str):
+        """
+        Extract host and guest names from folder structure or file path.
+        
+        The folder format is ALWAYS: Content/{HOST}/{HOST}_{GUEST}/...
+        Example: Tucker_Carlson_RFK_Jr -> ("Tucker Carlson", "RFK Jr")
+        
+        Args:
+            episode_title: Episode title (usually folder name) or file path
+            
+        Returns:
+            tuple: (host_name, guest_name) with underscores replaced by spaces
+                   Returns ("Unknown Host", "Unknown Guest") if parsing fails
+        """
+        try:
+            # If it's a full path, extract just the episode folder part
+            if 'Content' in episode_title:
+                # Convert to forward slashes for consistent parsing
+                normalized_path = episode_title.replace('\\', '/')
+                
+                # Find the Content folder and extract the structure after it
+                content_index = normalized_path.find('/Content/')
+                if content_index != -1:
+                    # Extract the part after Content/
+                    path_after_content = normalized_path[content_index + 9:]  # 9 = len('/Content/')
+                    path_parts = path_after_content.split('/')
+                    
+                    if len(path_parts) >= 2:
+                        # First part is host folder name
+                        host_folder = path_parts[0]
+                        # Second part is the host_guest combination
+                        host_guest_folder = path_parts[1]
+                        
+                        # Extract guest name by removing the host prefix and underscore
+                        if host_guest_folder.startswith(host_folder + '_'):
+                            guest_part = host_guest_folder[len(host_folder) + 1:]  # +1 for the underscore
+                            
+                            # Format names by replacing underscores with spaces
+                            host_name = host_folder.replace('_', ' ')
+                            guest_name = guest_part.replace('_', ' ')
+                            
+                            logger.info(f"Extracted from path - host: '{host_name}', guest: '{guest_name}'")
+                            return (host_name, guest_name)
+            
+            # If it's just the episode folder name (like "Tucker_Carlson_RFK_Jr")
+            # Try to parse it directly
+            if '_' in episode_title:
+                # Look for the pattern where the host name is repeated
+                parts = episode_title.split('_')
+                if len(parts) >= 2:
+                    # Check if it follows the HOST_HOST_GUEST pattern by looking for repeats
+                    # Find the longest matching prefix
+                    for i in range(1, len(parts)):
+                        host_candidate = '_'.join(parts[:i])
+                        remaining = '_'.join(parts[i:])
+                        
+                        # Check if the remaining part starts with the host candidate
+                        if remaining.startswith(host_candidate + '_'):
+                            guest_part = remaining[len(host_candidate) + 1:]
+                            if guest_part:  # Make sure there's something left for the guest
+                                host_name = host_candidate.replace('_', ' ')
+                                guest_name = guest_part.replace('_', ' ')
+                                logger.info(f"Extracted from title pattern - host: '{host_name}', guest: '{guest_name}'")
+                                return (host_name, guest_name)
+                    
+                    # If no pattern matches, fall back to simple split
+                    if len(parts) >= 2:
+                        # Try to guess: if we have an even number of parts, split in half
+                        # Otherwise, take the first part as host, rest as guest
+                        if len(parts) % 2 == 0:
+                            mid = len(parts) // 2
+                            host_name = '_'.join(parts[:mid]).replace('_', ' ')
+                            guest_name = '_'.join(parts[mid:]).replace('_', ' ')
+                        else:
+                            host_name = parts[0].replace('_', ' ')
+                            guest_name = '_'.join(parts[1:]).replace('_', ' ')
+                        
+                        logger.info(f"Extracted from title (fallback) - host: '{host_name}', guest: '{guest_name}'")
+                        return (host_name, guest_name)
+                        
+        except Exception as e:
+            logger.error(f"Error extracting names from path/title: {e}")
+        
+        logger.warning(f"Could not extract names from: {episode_title}")
+        return ("Unknown Host", "Unknown Guest")
 
 
 def main():

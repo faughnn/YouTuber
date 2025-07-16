@@ -53,9 +53,11 @@ class SimpleProcessingReport:
     total_sections: int           # Total audio sections found
     successful_sections: int      # Successfully processed
     failed_sections: int          # Failed to process
-    generated_files: List[str]    # List of generated .wav file paths
-    output_directory: str         # Path to Output/Audio/ directory
-    processing_time: float        # Total processing time in seconds
+    skipped_sections: int = 0     # Existing files that were skipped
+    generated_files: List[str] = None    # List of generated .wav file paths
+    existing_files: List[str] = None     # List of existing .wav file paths
+    output_directory: str = ""    # Path to Output/Audio/ directory
+    processing_time: float = 0.0  # Total processing time in seconds
     metadata_file: str = ""       # Path to metadata file (optional)
 
 
@@ -82,7 +84,7 @@ class SimpleTTSEngine:
         else:
             logger.info("Audio quality validation disabled")
     
-    def process_episode_script(self, script_path: str) -> SimpleProcessingReport:
+    def process_episode_script(self, script_path: str, progress_callback=None) -> SimpleProcessingReport:
         """
         Main processing pipeline:
         1. Parse JSON script file
@@ -91,6 +93,10 @@ class SimpleTTSEngine:
         4. Process each section sequentially (ONE AT A TIME)
         5. Log every API call
         6. Return compatible report
+        
+        Args:
+            script_path: Path to script file
+            progress_callback: Optional callback function(section_id, is_success, is_existing)
         """
         start_time = time.time()
         logger.info(f"Starting SimpleTTSEngine processing: {script_path}")
@@ -125,14 +131,35 @@ class SimpleTTSEngine:
             
             logger.info(f"Episode directory: {episode_dir}")
             logger.info(f"Output directory: {output_dir}")
-              # Step 4: Process each section sequentially
-            logger.info("Step 4: Processing audio sections...")
+            
+            # Step 4: Check for existing audio files
+            logger.info("Step 4: Checking for existing audio files...")
+            existing_sections, missing_sections, existing_files = self.check_existing_audio_files(audio_sections, output_dir)
+            
+            logger.info(f"Found {len(existing_sections)} existing files, {len(missing_sections)} missing files")
+            
+            # Step 5: Process sections sequentially 
+            logger.info("Step 5: Processing audio sections...")
             generated_files = []
             successful_count = 0
             failed_count = 0
+            skipped_count = len(existing_sections)
+              # Add existing files to the results immediately and log skipped files
+            for existing_file in existing_files:
+                generated_files.append(existing_file)
+                successful_count += 1
+                # Extract section_id from filename for logging
+                section_id = Path(existing_file).stem
+                logger.info(f"✅ Skipping existing file: {section_id}")
+                # Notify progress callback about existing files
+                if progress_callback:
+                    progress_callback(section_id, True, is_existing=True)
             
-            for i, section in enumerate(audio_sections, 1):
-                logger.info(f"Processing section {i}/{len(audio_sections)}: {section.section_id}")
+            # Only process missing sections
+            sections_to_process = missing_sections
+            
+            for i, section in enumerate(sections_to_process, 1):
+                logger.info(f"Processing section {i}/{len(sections_to_process)}: {section.section_id} (missing file)")
                 
                 try:
                     # Generate output path
@@ -159,26 +186,37 @@ class SimpleTTSEngine:
                         successful_count += 1
                         
                         logger.info(f"✅ Successfully processed {section.section_id}")
+                        # Notify progress callback about success
+                        if progress_callback:
+                            progress_callback(section.section_id, True, is_existing=False)
                     else:
                         failed_count += 1
                         logger.error(f"❌ Failed to process {section.section_id}")
+                        # Notify progress callback about failure
+                        if progress_callback:
+                            progress_callback(section.section_id, False, is_existing=False)
                         
                 except Exception as e:
                     failed_count += 1
                     logger.error(f"❌ Error processing {section.section_id}: {e}")
+                    # Notify progress callback about exception
+                    if progress_callback:
+                        progress_callback(section.section_id, False, is_existing=False)
                     # Fail fast - stop on any error
                     raise Exception(f"Processing failed at section {section.section_id}: {e}")
             
             processing_time = time.time() - start_time
             
-            logger.info(f"Processing complete: {successful_count} successful, {failed_count} failed")
+            logger.info(f"Processing complete: {successful_count} successful, {failed_count} failed, {skipped_count} skipped")
             logger.info(f"Total processing time: {processing_time:.2f}s")
             
             return SimpleProcessingReport(
                 total_sections=len(audio_sections),
                 successful_sections=successful_count,
                 failed_sections=failed_count,
+                skipped_sections=skipped_count,
                 generated_files=generated_files,
+                existing_files=existing_files,
                 output_directory=output_dir,
                 processing_time=processing_time
             )
@@ -400,3 +438,35 @@ class SimpleTTSEngine:
         # All attempts failed
         logger.error(f"Failed to generate quality audio for {section_id} after {max_retries} attempts")
         return False
+    
+    def check_existing_audio_files(self, audio_sections: List[AudioSection], output_dir: str) -> tuple:
+        """
+        Check which audio files already exist
+        
+        Args:
+            audio_sections: List of audio sections from script
+            output_dir: Output directory path
+            
+        Returns:
+            Tuple of (existing_sections, missing_sections, existing_files)
+        """
+        existing_sections = []
+        missing_sections = []
+        existing_files = []
+        
+        for section in audio_sections:
+            audio_file_path = Path(output_dir) / f"{section.section_id}.wav"
+            
+            # Check if file exists and has reasonable size (min 1KB to avoid empty files)
+            if audio_file_path.exists() and audio_file_path.stat().st_size > 1024:
+                existing_sections.append(section)
+                existing_files.append(str(audio_file_path))
+                logger.debug(f"✓ Found existing file: {section.section_id}.wav ({audio_file_path.stat().st_size} bytes)")
+            else:
+                missing_sections.append(section)
+                if audio_file_path.exists():
+                    logger.warning(f"⚠ File too small, will regenerate: {section.section_id}.wav ({audio_file_path.stat().st_size} bytes)")
+                else:
+                    logger.debug(f"⚠ Missing file: {section.section_id}.wav")
+        
+        return existing_sections, missing_sections, existing_files

@@ -169,9 +169,18 @@ def _format_timestamp_readable(seconds: float) -> str:
     seconds_val = int(total_seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{seconds_val:02d}"
 
-def diarize_audio(audio_path, hf_auth_token_to_use):
+def diarize_audio(audio_path, hf_auth_token_to_use, output_file_path=None):
     """
     Transcribes and diarizes an audio file using whisperX, returning a JSON formatted string.
+    
+    Args:
+        audio_path: Path to input audio file
+        hf_auth_token_to_use: HuggingFace token for diarization models
+        output_file_path: Explicit path where transcript should be saved
+                         (caller is responsible for ensuring directory exists)
+    
+    Returns:
+        JSON string with diarization results
     """
     if not os.path.exists(audio_path):
         return f"Error: Audio file not found at {audio_path}"
@@ -186,7 +195,7 @@ def diarize_audio(audio_path, hf_auth_token_to_use):
         compute_type = "int8"   # Recommended for CPU
         print("CUDA not available. Using CPU.")
 
-    whisper_model_size = "base"  # "base", "small", "medium", "large-v2", "large-v3"
+    whisper_model_size = "medium"  # "base", "small", "medium", "large-v2", "large-v3"
                                # Larger models are more accurate but slower and require more memory.
     print(f"Using device: {device}")
     print(f"Loading Whisper model: {whisper_model_size} (compute_type: {compute_type})")
@@ -286,9 +295,27 @@ def diarize_audio(audio_path, hf_auth_token_to_use):
         print("✅ JSON formatting complete.")
         
         if not json_output["segments"]:
-            return json.dumps({"error": "No valid transcript segments could be formatted for JSON output."}, indent=2)
+            error_result = json.dumps({"error": "No valid transcript segments could be formatted for JSON output."}, indent=2)
+            if output_file_path:
+                try:
+                    with open(output_file_path, "w", encoding="utf-8") as f:
+                        f.write(error_result)
+                except Exception as e:
+                    print(f"Warning: Could not save error result to {output_file_path}: {e}")
+            return error_result
             
-        return json.dumps(json_output, indent=2, ensure_ascii=False)
+        result_json = json.dumps(json_output, indent=2, ensure_ascii=False)
+        
+        # Save to file if output path is provided
+        if output_file_path:
+            try:
+                with open(output_file_path, "w", encoding="utf-8") as f:
+                    f.write(result_json)
+                print(f"Transcript saved to: {output_file_path}")
+            except Exception as e:
+                print(f"Warning: Could not save transcript to {output_file_path}: {e}")
+        
+        return result_json
 
     except RuntimeError as e:
         error_data = {"error": str(e)}
@@ -296,9 +323,24 @@ def diarize_audio(audio_path, hf_auth_token_to_use):
             error_data["suggestion"] = "CUDA out of memory. Try a smaller Whisper model or run on CPU."
         elif "Could not load library cudnn_ops_infer.dll" in str(e) or "Could not load library cublas64_11.dll" in str(e):
             error_data["suggestion"] = "CUDA library load error. Ensure CUDA toolkit is installed correctly and compatible with PyTorch."
-        return json.dumps(error_data, indent=2)
+        
+        error_result = json.dumps(error_data, indent=2)
+        if output_file_path:
+            try:
+                with open(output_file_path, "w", encoding="utf-8") as f:
+                    f.write(error_result)
+            except Exception as save_e:
+                print(f"Warning: Could not save error result to {output_file_path}: {save_e}")
+        return error_result
     except Exception as e:
-        return json.dumps({"error": f"An unexpected error occurred: {e}"}, indent=2)
+        error_result = json.dumps({"error": f"An unexpected error occurred: {e}"}, indent=2)
+        if output_file_path:
+            try:
+                with open(output_file_path, "w", encoding="utf-8") as f:
+                    f.write(error_result)
+            except Exception as save_e:
+                print(f"Warning: Could not save error result to {output_file_path}: {save_e}")
+        return error_result
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -353,39 +395,21 @@ if __name__ == "__main__":
             output_file_path_explicitly_provided = True
             # token_message already set to use default
             if len(sys.argv) > 3: # User provided too many args if arg2 was output
-                 print(f"Warning: Extra argument '{sys.argv[3]}' ignored. Interpreting '{sys.argv[2]}' as output file path.", file=sys.stderr)    # Extract base name for creating subfolder structure: Channel/Episode/
-    audio_base_name, _ = os.path.splitext(os.path.basename(audio_file_path))
+                 print(f"Warning: Extra argument '{sys.argv[3]}' ignored. Interpreting '{sys.argv[2]}' as output file path.", file=sys.stderr)
     
-    # Extract channel name and create episode folder name
-    channel_name = extract_channel_name(audio_base_name)
-    episode_folder_name = sanitize_audio_filename(audio_base_name)
-    
-    # Create the full path: Transcripts/Channel/Episode/
-    channel_folder = os.path.join(TRANSCRIPTS_FOLDER, channel_name)
-    audio_transcript_folder = os.path.join(channel_folder, episode_folder_name)
-    
+    # Handle output file path
     if not output_file_path_explicitly_provided:
-        output_filename = audio_base_name + ".json" # Default to .json extension
-        output_file_path = os.path.join(audio_transcript_folder, output_filename)
+        # Default to audio file name with .json extension in same directory
+        audio_base_name, _ = os.path.splitext(os.path.basename(audio_file_path))
+        audio_dir = os.path.dirname(audio_file_path)
+        output_file_path = os.path.join(audio_dir, audio_base_name + ".json")
         print(f"Output file path not specified. Defaulting to: {output_file_path}")
-    else:        # If path is explicitly provided, ensure it goes into the audio-specific subfolder
-        if not os.path.isabs(output_file_path):
-            output_file_path = os.path.join(audio_transcript_folder, os.path.basename(output_file_path))
-        else:
-            # For absolute paths, ensure they still go in the correct subfolder structure
-            output_dir = os.path.dirname(output_file_path)
-            if not output_dir.endswith(episode_folder_name):
-                output_file_path = os.path.join(audio_transcript_folder, os.path.basename(output_file_path))
-
-    # Ensure the audio-specific transcript folder exists
-    if not os.path.exists(audio_transcript_folder):
-        os.makedirs(audio_transcript_folder)
-        print(f"Created directory: {audio_transcript_folder}")
     
-    # Also ensure the main Transcripts folder exists
-    if not os.path.exists(TRANSCRIPTS_FOLDER):
-        os.makedirs(TRANSCRIPTS_FOLDER)
-        print(f"Created directory: {TRANSCRIPTS_FOLDER}")
+    # Ensure output directory exists
+    output_dir = os.path.dirname(output_file_path)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"Created output directory: {output_dir}")
 
     print(f"Starting diarization for: {audio_file_path}")
     print(token_message) # Print token status
@@ -393,20 +417,8 @@ if __name__ == "__main__":
     if output_file_path_explicitly_provided: # Only print this if user specified it
         print(f"Output will be saved to: {output_file_path}")
 
-    full_transcript_json = diarize_audio(audio_file_path, hugging_face_token_to_pass_to_function)
+    full_transcript_json = diarize_audio(audio_file_path, hugging_face_token_to_pass_to_function, output_file_path)
 
-    try:
-        with open(output_file_path, "w", encoding="utf-8") as f:
-            f.write(full_transcript_json)
-        print(f"\\n--- JSON Transcript ---")
-        # Optionally print a snippet or confirmation instead of the whole JSON to console
-        # For brevity, let's just confirm save.
-        # print(full_transcript_json) 
-        print(f"--- End of JSON Transcript ---")
-        print(f"Transcript successfully saved to: {output_file_path}")
-    except Exception as e:
-        print(f"\\nError writing transcript to {output_file_path}: {e}")
-        # Print to console if file writing fails
-        print(f"\\n--- JSON Transcript (Console Fallback) ---")
-        print(full_transcript_json)
-        print(f"--- End of JSON Transcript ---")
+    # Function already saved the file, so just show completion message
+    print(f"\\n--- JSON Transcript Generation Complete ---")
+    print(f"--- End of Process ---")

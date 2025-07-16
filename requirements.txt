@@ -7,6 +7,10 @@ requests>=2.25.0
 PyYAML>=6.0
 tqdm>=4.64.0
 
+# Enhanced logging and UI
+rich>=13.7.0
+colorama>=0.4.6
+
 # Audio/Video processing
 ffmpeg-python>=0.2.0
 
@@ -17,6 +21,9 @@ torch>=2.0.0
 transformers>=4.35.0
 pyannote.audio>=3.1.1
 
+# TTS dependencies
+elevenlabs>=0.2.0
+
 # File processing
 pathlib2>=2.3.0
 
@@ -26,6 +33,14 @@ urllib3>=1.26.0
 # Data processing
 pandas>=1.5.0
 numpy>=1.24.0
+
+# Web UI Dependencies (Flask-based YouTube Pipeline UI)
+Flask>=3.0.0
+Flask-SocketIO>=5.3.0
+Flask-SQLAlchemy>=3.1.0
+SQLAlchemy>=2.0.0
+Werkzeug>=3.0.0
+watchdog>=3.0.0
 
 # Optional dependencies for development
 pytest>=7.0.0

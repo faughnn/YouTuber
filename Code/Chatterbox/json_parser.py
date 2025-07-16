@@ -66,10 +66,9 @@ class ChatterboxResponseParser:
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        
-        # Valid section types
-        self.audio_section_types = {'intro', 'pre_clip', 'post_clip', 'outro'}
-        self.video_section_types = {'video_clip'}
+          # Valid section types
+        self.audio_section_types = {'intro', 'intro_plus_hook_analysis', 'pre_clip', 'post_clip', 'outro'}
+        self.video_section_types = {'video_clip', 'hook_clip'}
         self.all_section_types = self.audio_section_types | self.video_section_types
         
         # Required fields for different section types (simplified for Chatterbox)

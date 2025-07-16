@@ -10,7 +10,7 @@ from typing import Dict, Any
 
 # Default configuration settings
 DEFAULT_CONFIG = {
-    "start_buffer_seconds": 3.0,
+    "start_buffer_seconds": 0.0,
     "end_buffer_seconds": 0.0,
     "video_quality": {
         "codec": "libx264",

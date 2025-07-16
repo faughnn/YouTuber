@@ -2,7 +2,7 @@
 
 **Date Created:** June 19, 2025  
 **Status:** Ready for Implementation  
-**Technology Stack:** Flask + Tailscale + Tailwind CSS
+**Technology Stack:** Flask + Tailwind CSS
 
 ## Project Overview
 
@@ -10,7 +10,6 @@ Create a web-based UI for the 7-stage YouTube video processing pipeline that pro
 - **Flexible Pipeline Control**: Run any combination of stages
 - **Manual Segment Selection**: Choose specific content analysis segments for script generation
 - **Multiple Creative Workflows**: Automated, semi-manual, and fully manual approaches
-- **Remote Access**: Secure access via Tailscale from any device
 
 ## Core Requirements Summary
 
@@ -37,7 +36,7 @@ Create a web-based UI for the 7-stage YouTube video processing pipeline that pro
 - **Preset Management**: Create, save, load, overwrite, delete presets
 
 ### 4. Prompt Management
-- **Analysis Prompts**: Dropdown selection for Stage 3 content analysis
+- **Analysis Guidelines**: Dropdown selection for Stage 3 content analysis
 - **Narrative Prompts**: Dropdown selection for Stage 4 script generation
 - **Manual Selection Prompt**: User will create custom prompt for manual segment workflow
 - **Prompt References**: Store prompt names in presets, not full content
@@ -49,12 +48,6 @@ Create a web-based UI for the 7-stage YouTube video processing pipeline that pro
 - **Format Support**: `.mp3`, `.wav`, `.aac`, `.m4a` (based on Video_Compilator)
 - **File Organization**: Place manual audio in same directory as TTS with same naming convention
 
-### 6. Remote Access via Tailscale
-- **Secure Access**: Private network access without public exposure
-- **Mobile Responsive**: Tailwind CSS for cross-device compatibility
-- **Real-time Updates**: Flask-SocketIO for live pipeline monitoring
-- **Session Persistence**: Maintain state across device connections
-
 ## Technical Architecture
 
 ### Flask Application Structure
@@ -63,7 +56,7 @@ Code/UI/
 ├── app.py                      # Main Flask application
 ├── config.py                   # Configuration management
 ├── requirements.txt            # Python dependencies
-├── run_server.py              # Server startup with Tailscale integration
+├── run_server.py              # Server startup script
 ├── routes/
 │   ├── __init__.py
 │   ├── main.py                # Dashboard and episode management
@@ -185,8 +178,7 @@ Code/UI/
 - [ ] Set up Flask application structure
 - [ ] Create basic routes and templates
 - [ ] Implement Tailwind CSS styling
-- [ ] Add Tailscale server configuration
-- [ ] Test basic remote access
+- [ ] Test basic local access
 
 ### Phase 2: Pipeline Integration (Week 2)
 - [ ] Create pipeline controller service
@@ -217,7 +209,7 @@ Code/UI/
 - [ ] Add audio preview capabilities
 
 ### Phase 6: Polish and Testing (Week 6)
-- [ ] Mobile responsive testing
+- [ ] Responsive design testing
 - [ ] Error handling improvements
 - [ ] Performance optimization
 - [ ] User experience refinements
@@ -272,20 +264,17 @@ Code/UI/
 
 ## Next Steps
 
-1. **Install Tailscale** on development machine
-2. **Set up Flask development environment** with required dependencies
-3. **Create basic application structure** following outlined directory layout
-4. **Implement core dashboard** with pipeline status display
-5. **Test Tailscale remote access** from mobile devices
-6. **Begin Phase 1 implementation** with iterative development approach
+1. **Set up Flask development environment** with required dependencies
+2. **Create basic application structure** following outlined directory layout
+3. **Implement core dashboard** with pipeline status display
+4. **Begin Phase 1 implementation** with iterative development approach
 
 ## Success Criteria
 
 - ✅ **Pipeline Control**: Successfully run any combination of stages
 - ✅ **Segment Selection**: Choose specific segments for narrative generation
-- ✅ **Remote Access**: Access UI from mobile devices via Tailscale
 - ✅ **Workflow Presets**: Save and load complete workflow configurations
 - ✅ **Audio Integration**: Successfully import manual audio files
 - ✅ **Real-time Updates**: Live pipeline progress monitoring
-- ✅ **Mobile Responsive**: Functional interface on phones and tablets
+- ✅ **Responsive Design**: Functional interface on different screen sizes
 - ✅ **Error Handling**: Clear error messages and pipeline failure recovery
