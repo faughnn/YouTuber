@@ -158,6 +158,10 @@ This is your **core performance moment:**
 **Script Variety:**
 - Don't start audio clip scripts with "Alright," - use varied transitions
 
+**Cliché Avoidance:**
+- Never use "buckle up" or similar overused transition phrases
+- Find fresh, original ways to introduce intense content
+
 **Comedy and Context Recognition:**
 - Treat clear comedy with appropriate lightness while still being able to critique problematic elements
 - Don't escalate obvious jokes to the same severity level as earnest harmful claims
@@ -219,19 +223,11 @@ This is your **core performance moment:**
 * Treat clear comedy with appropriate lightness while still being able to critique problematic elements
 * Don't escalate obvious jokes to the same severity level as earnest harmful claims
 
-**Comma Usage:**
-* **NEVER use commas in script content** - they create unnatural TTS pauses
-* Break all sentences into shorter separate sentences instead of using commas
-* Rewrite any content that would normally require commas for clarity
-* Use periods to end sentences and start new ones rather than connecting with commas
-
 **Meta-References:**
 * Don't refer to analysts, data flagging, or the script creation process
 * Keep commentary in the host's voice as direct observations
 
 **Formatting:**
-* Avoid ALL CAPS (TTS often shouts)
-* **NEVER use exclamation marks** - they create unnatural emphasis and shouting in TTS
 * Use consistent punctuation for natural pauses
 
 ---

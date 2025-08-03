@@ -61,11 +61,8 @@ class FileOrganizer:
         sanitized_guest = self.sanitize_filename(guest_name)
         
         # Create a descriptive episode folder name
-        if sanitized_guest and sanitized_guest != "No_Guest":
-            episode_folder_name = f"{sanitized_host}_{sanitized_guest}"
-        else:
-            # Fallback to using the sanitized original title if no guest
-            episode_folder_name = self.sanitize_filename(original_video_title)
+        # Always use host_guest format for consistency in name extraction
+        episode_folder_name = f"{sanitized_host}_{sanitized_guest}"
 
         content_base = self.base_paths.get('episode_base', 'Content')
         

@@ -183,6 +183,10 @@ import yaml
 import json
 import logging
 import argparse
+import subprocess
+import signal
+import atexit
+import requests
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Union, Optional
@@ -234,6 +238,11 @@ class MasterProcessorV2:
     Core Principle: Orchestrator adapts to working module interfaces,
     not the reverse. All 7 stages implemented as direct calls to 
     working modules without abstraction layers.
+    
+    Features:
+    - Automatic Chatterbox TTS server management (start/stop)
+    - Enhanced logging with Rich formatting
+    - Session tracking and cleanup
     """
     
     def __init__(self, config_path: Optional[str] = None, verbosity: LogLevel = LogLevel.NORMAL):
@@ -262,6 +271,16 @@ class MasterProcessorV2:
         # Session management for tracking
         self.session_id = self._generate_session_id()
         self.episode_dir = None
+        
+        # Chatterbox TTS Server Configuration
+        self.chatterbox_python_path = r"C:/Users/nfaug/AppData/Local/Programs/Python/Python312/python.exe"
+        self.chatterbox_script_path = r"c:/Users/nfaug/chatterbox-tts-api/main.py"
+        self.chatterbox_api_base_url = "http://localhost:4123"
+        self.server_startup_wait = 45  # seconds to wait for server to start (increased for model loading)
+        self._chatterbox_server_process = None
+        
+        # Register cleanup function to stop server on exit
+        atexit.register(self._stop_chatterbox_server)
         
         self.enhanced_logger.info(f"MasterProcessorV2 initialized - Session: {self.session_id}")
         self.enhanced_logger.info(f"Configuration loaded from: {self.config_path}")
@@ -345,6 +364,242 @@ class MasterProcessorV2:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"session_{timestamp}"
 
+    def _save_episode_metadata(self, final_names: Dict[str, str], metadata: Dict, episode_paths: Dict[str, str]) -> None:
+        """
+        Save episode metadata including verified host/guest names to Input folder.
+        
+        Args:
+            final_names: Dictionary with 'host' and 'guest' keys
+            metadata: Video metadata from YouTube
+            episode_paths: Dictionary with episode folder paths
+        """
+        try:
+            import json
+            from datetime import datetime
+            
+            # Create metadata dictionary
+            episode_metadata = {
+                "source_info": {
+                    "title": metadata.get('title', 'Unknown Title'),
+                    "url": metadata.get('webpage_url', ''),
+                    "uploader": metadata.get('uploader', ''),
+                    "uploader_id": metadata.get('uploader_id', ''),
+                    "duration": metadata.get('duration', 0),
+                    "view_count": metadata.get('view_count', 0),
+                    "upload_date": metadata.get('upload_date', ''),
+                    "download_date": datetime.now().isoformat()
+                },
+                "verified_names": {
+                    "host": final_names['host'],
+                    "guest": final_names['guest'],
+                    "verification_method": "user_verified" if final_names.get('_user_verified', False) else "auto_extracted",
+                    "verified_at": datetime.now().isoformat()
+                },
+                "processing_info": {
+                    "episode_folder": episode_paths['episode_folder'],
+                    "session_id": self.session_id,
+                    "created_by": "MasterProcessorV2",
+                    "created_at": datetime.now().isoformat(),
+                    "stage_1_completed": True
+                }
+            }
+            
+            # Save to Input folder
+            input_folder = episode_paths.get('input_folder', os.path.join(episode_paths['episode_folder'], 'Input'))
+            metadata_path = os.path.join(input_folder, 'episode_metadata.json')
+            
+            # Ensure Input folder exists
+            os.makedirs(input_folder, exist_ok=True)
+            
+            # Write metadata file
+            with open(metadata_path, 'w', encoding='utf-8') as f:
+                json.dump(episode_metadata, f, indent=2, ensure_ascii=False)
+            
+            self.enhanced_logger.info(f"📋 Episode metadata saved: {metadata_path}")
+            self.enhanced_logger.info(f"   Host: {final_names['host']}")
+            self.enhanced_logger.info(f"   Guest: {final_names['guest']}")
+            
+        except Exception as e:
+            self.enhanced_logger.error(f"Failed to save episode metadata: {e}")
+            # Don't raise exception - this is not critical to pipeline execution
+
+    def _load_episode_metadata(self, episode_folder: str) -> Dict:
+        """
+        Load saved episode metadata from Input folder.
+        
+        Args:
+            episode_folder: Path to episode folder
+            
+        Returns:
+            Dict: Episode metadata, or empty dict if not found
+        """
+        try:
+            import json
+            
+            metadata_path = os.path.join(episode_folder, 'Input', 'episode_metadata.json')
+            
+            if os.path.exists(metadata_path):
+                with open(metadata_path, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+                self.enhanced_logger.info(f"📋 Loaded episode metadata: {metadata_path}")
+                return metadata
+            else:
+                self.enhanced_logger.warning(f"Episode metadata not found: {metadata_path}")
+                return {}
+                
+        except Exception as e:
+            self.enhanced_logger.error(f"Failed to load episode metadata: {e}")
+            return {}
+
+    @staticmethod
+    def load_episode_metadata_static(episode_folder: str) -> Dict:
+        """
+        Static method to load episode metadata - can be used by other modules.
+        
+        Args:
+            episode_folder: Path to episode folder
+            
+        Returns:
+            Dict: Episode metadata, or empty dict if not found
+        """
+        try:
+            import json
+            
+            metadata_path = os.path.join(episode_folder, 'Input', 'episode_metadata.json')
+            
+            if os.path.exists(metadata_path):
+                with open(metadata_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            else:
+                return {}
+                
+        except Exception:
+            return {}
+
+    # ========================================================================
+    # CHATTERBOX TTS SERVER MANAGEMENT
+    # ========================================================================
+    
+    def _is_chatterbox_server_running(self) -> bool:
+        """
+        Check if the Chatterbox TTS server is already running.
+        
+        Returns:
+            True if server responds, False otherwise
+        """
+        try:
+            response = requests.get(f"{self.chatterbox_api_base_url}/health", timeout=2)
+            return response.status_code == 200
+        except:
+            return False
+
+    def _start_chatterbox_server(self) -> bool:
+        """
+        Start the Chatterbox TTS server if it's not already running.
+        
+        Returns:
+            True if server is running (either started or was already running), False otherwise
+        """
+        # Check if server is already running
+        if self._is_chatterbox_server_running():
+            self.enhanced_logger.info("✅ Chatterbox TTS server is already running")
+            return True
+        
+        self.enhanced_logger.info("🚀 Starting Chatterbox TTS server...")
+        
+        # Debug: Show the exact command being run
+        command = [self.chatterbox_python_path, self.chatterbox_script_path]
+        working_dir = Path(self.chatterbox_script_path).parent
+        self.enhanced_logger.info(f"Command: {' '.join(command)}")
+        self.enhanced_logger.info(f"Working directory: {working_dir}")
+        
+        # Verify paths exist
+        if not os.path.exists(self.chatterbox_python_path):
+            self.enhanced_logger.error(f"❌ Python executable not found: {self.chatterbox_python_path}")
+            return False
+        
+        if not os.path.exists(self.chatterbox_script_path):
+            self.enhanced_logger.error(f"❌ Chatterbox script not found: {self.chatterbox_script_path}")
+            return False
+        
+        try:
+            # Start the server process - allow output to be visible for debugging
+            self.enhanced_logger.info("Starting server process...")
+            self._chatterbox_server_process = subprocess.Popen(
+                [self.chatterbox_python_path, self.chatterbox_script_path],
+                cwd=Path(self.chatterbox_script_path).parent,
+                stdout=None,  # Let output go to console
+                stderr=None,  # Let errors go to console
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+            )
+            
+            self.enhanced_logger.info(f"Server process started with PID: {self._chatterbox_server_process.pid}")
+            
+            # Wait for server to start up
+            self.enhanced_logger.info(f"⏳ Waiting up to {self.server_startup_wait} seconds for server to initialize...")
+            self.enhanced_logger.info("   (Server needs to load TTS model and initialize CUDA)")
+            
+            for i in range(self.server_startup_wait):
+                time.sleep(1)
+                
+                # Check if process is still running
+                if self._chatterbox_server_process.poll() is not None:
+                    self.enhanced_logger.error(f"❌ Server process exited early with code: {self._chatterbox_server_process.returncode}")
+                    return False
+                
+                if self._is_chatterbox_server_running():
+                    self.enhanced_logger.success("✅ Chatterbox TTS server started successfully!")
+                    return True
+                
+                # Provide periodic updates during the longer wait
+                if i == 10:
+                    self.enhanced_logger.info("   Loading TTS model...")
+                elif i == 20:
+                    self.enhanced_logger.info("   Initializing CUDA...")
+                elif i == 30:
+                    self.enhanced_logger.info("   Almost ready...")
+                elif i == self.server_startup_wait // 2:
+                    self.enhanced_logger.info("   Still starting up...")
+            
+            # If we get here, server didn't start in time
+            self.enhanced_logger.error("❌ Server failed to start within timeout period")
+            
+            # Try to get some output from the process for debugging
+            if self._chatterbox_server_process and self._chatterbox_server_process.poll() is not None:
+                self.enhanced_logger.error(f"Process exited with code: {self._chatterbox_server_process.returncode}")
+            
+            self._stop_chatterbox_server()
+            return False
+            
+        except Exception as e:
+            self.enhanced_logger.error(f"❌ Failed to start Chatterbox server: {e}")
+            return False
+
+    def _stop_chatterbox_server(self):
+        """
+        Stop the Chatterbox TTS server if we started it.
+        """
+        if self._chatterbox_server_process:
+            self.enhanced_logger.info("🛑 Stopping Chatterbox TTS server...")
+            try:
+                if sys.platform == "win32":
+                    # On Windows, send CTRL_BREAK_EVENT to the process group
+                    self._chatterbox_server_process.send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    self._chatterbox_server_process.terminate()
+                
+                # Wait for process to end
+                self._chatterbox_server_process.wait(timeout=5)
+                self.enhanced_logger.success("✅ Chatterbox TTS server stopped")
+            except subprocess.TimeoutExpired:
+                # Force kill if it doesn't stop gracefully
+                self._chatterbox_server_process.kill()
+                self.enhanced_logger.warning("⚠️ Chatterbox TTS server force stopped")
+            except Exception as e:
+                self.enhanced_logger.warning(f"⚠️ Error stopping server: {e}")
+            finally:
+                self._chatterbox_server_process = None
+
     # ========================================================================
     # STAGE METHOD TEMPLATES - Direct delegation patterns
     # ========================================================================
@@ -412,8 +667,12 @@ class MasterProcessorV2:
                     self.enhanced_logger.info(f"User correction: Host='{extracted_names['host']}' -> '{verified_names['host']}', Guest='{extracted_names['guest']}' -> '{verified_names['guest']}'")
                 
                 final_names = verified_names
+                # Mark that user verification occurred
+                final_names['_user_verified'] = True
             else:
                 final_names = extracted_names
+                # Mark that no user verification occurred
+                final_names['_user_verified'] = False
             
             # Step 4: Directory Setup
             self.enhanced_logger.info("📁 Creating directory structure...")
@@ -427,6 +686,9 @@ class MasterProcessorV2:
             self.episode_dir = episode_paths['episode_folder']
             
             self.enhanced_logger.info(f"📁 Episode directory: {Path(self.episode_dir).name}")
+            
+            # Save episode metadata with verified host/guest names
+            self._save_episode_metadata(final_names, metadata, episode_paths)
             
             # Step 5: Direct Download to Target Paths
             # Download audio with progress feedback
@@ -755,6 +1017,11 @@ class MasterProcessorV2:
             if not os.path.exists(script_path):
                 raise Exception(f"Script file not found: {script_path}")
             
+            # Start Chatterbox server if using Chatterbox TTS
+            if tts_provider.lower() == "chatterbox":
+                if not self._start_chatterbox_server():
+                    raise Exception("Failed to start Chatterbox TTS server")
+            
             # Pre-parse script to get section counts for progress tracking
             from Chatterbox.json_parser import ChatterboxResponseParser
             parser = ChatterboxResponseParser()
@@ -855,6 +1122,10 @@ class MasterProcessorV2:
         except Exception as e:
             self.enhanced_logger.error(f"TTS audio generation failed: {e}")
             raise Exception(f"{tts_provider.upper()} TTS engine audio generation failed: {e}")
+        finally:
+            # Stop Chatterbox server if we started it
+            if tts_provider.lower() == "chatterbox":
+                self._stop_chatterbox_server()
     
     def _stage_6_video_clipping(self, script_path: str) -> Dict:
         """

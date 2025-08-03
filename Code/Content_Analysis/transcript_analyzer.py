@@ -44,6 +44,58 @@ logger = logging.getLogger(__name__)
 # Configuration
 API_KEY = "AIzaSyCsti0qnCEKOgzAnG_w41IfMNMxkyl3ysw"
 
+def load_episode_metadata_from_path(transcript_path):
+    """
+    Load episode metadata from Input/episode_metadata.json based on transcript file path.
+    
+    Args:
+        transcript_path: Path to transcript file or any file within episode folder
+        
+    Returns:
+        Dict: Episode metadata, or None if not found
+    """
+    try:
+        import json
+        
+        # Navigate up the directory tree to find the episode root folder
+        current_path = os.path.abspath(transcript_path)
+        
+        # If it's a file, get its directory
+        if os.path.isfile(current_path):
+            current_path = os.path.dirname(current_path)
+        
+        # Look for episode folder structure (should contain Input, Processing, Output folders)
+        while current_path and current_path != os.path.dirname(current_path):
+            input_folder = os.path.join(current_path, 'Input')
+            processing_folder = os.path.join(current_path, 'Processing')
+            output_folder = os.path.join(current_path, 'Output')
+            
+            # Check if this looks like an episode folder
+            if (os.path.exists(input_folder) and 
+                os.path.exists(processing_folder) and 
+                os.path.exists(output_folder)):
+                
+                # Try to load metadata from Input folder
+                metadata_path = os.path.join(input_folder, 'episode_metadata.json')
+                if os.path.exists(metadata_path):
+                    with open(metadata_path, 'r', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                    logger.info(f"✅ Loaded episode metadata from: {metadata_path}")
+                    return metadata
+                else:
+                    logger.warning(f"Episode structure found but no metadata file: {metadata_path}")
+                    return None
+            
+            # Move up one directory level
+            current_path = os.path.dirname(current_path)
+        
+        logger.warning(f"No episode metadata found for path: {transcript_path}")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Failed to load episode metadata: {e}")
+        return None
+
 def extract_host_and_guest_names(file_path):
     """
     Extract host and guest names from folder structure.
@@ -715,14 +767,26 @@ def create_file_based_prompt(analysis_rules, file_path=None):
     # Extract participant names if file_path is provided
     participant_info = ""
     if file_path:
-        host_name, guest_name = extract_host_and_guest_names(file_path)
+        # Try to load from metadata first, fallback to extraction
+        metadata = load_episode_metadata_from_path(file_path)
+        if metadata and metadata.get('verified_names'):
+            host_name = metadata['verified_names']['host']
+            guest_name = metadata['verified_names']['guest']
+            verification_method = metadata['verified_names'].get('verification_method', 'unknown')
+            logger.info(f"✅ Using verified names from metadata: Host='{host_name}', Guest='{guest_name}' (Method: {verification_method})")
+        else:
+            # Fallback to folder structure extraction
+            logger.warning("⚠️  No metadata found, falling back to folder structure extraction")
+            host_name, guest_name = extract_host_and_guest_names(file_path)
+            logger.info(f"📁 Extracted from folder structure: Host='{host_name}', Guest='{guest_name}'")
+        
         participant_info = f"""
 ## PARTICIPANT INFORMATION
 
 **Host Name:** {host_name}
 **Guest Name:** {guest_name}
 
-**CRITICAL INSTRUCTION:** Use "{host_name}" as the host's name and "{guest_name}" as the guest's name throughout your analysis. These are the authoritative names extracted from the folder structure.
+**CRITICAL INSTRUCTION:** Use "{host_name}" as the host's name and "{guest_name}" as the guest's name throughout your analysis. These are the authoritative names extracted from the episode metadata.
 
 ---
 

@@ -135,19 +135,23 @@ class UserVerification:
             final: Whether this is the final preview
         """
         try:
-            # Use FileOrganizer to get the actual paths that would be created
-            # We need to create a temporary FileOrganizer with default config
+            # Create preview paths WITHOUT actually creating directories
+            from .file_organizer import FileOrganizer
+            
+            # Get the paths but don't create directories yet
             temp_organizer = FileOrganizer({'episode_base': 'Content'})
             
-            preview_paths = temp_organizer.get_episode_paths(
-                metadata.get('title', 'Unknown Title'),
-                names['host'],
-                names['guest']
-            )
+            # Calculate what the paths WOULD be (without creating them)
+            title = metadata.get('title', 'Unknown Title')
+            sanitized_host = temp_organizer.sanitize_filename(names['host'])
+            sanitized_guest = temp_organizer.sanitize_filename(names['guest'])
+            episode_folder_name = f"{sanitized_host}_{sanitized_guest}"
+            content_base = temp_organizer.base_paths.get('episode_base', 'Content')
+            episode_folder = os.path.join(content_base, sanitized_host, episode_folder_name)
             
             prefix = "🎯 FINAL" if final else "👀 PREVIEW"
             print(f"\n{prefix} - Folder Structure:")
-            print(f"   📁 {preview_paths['episode_folder']}")
+            print(f"   📁 {episode_folder}")
             print(f"      ├── Input/")
             print(f"      ├── Processing/")
             print(f"      └── Output/")

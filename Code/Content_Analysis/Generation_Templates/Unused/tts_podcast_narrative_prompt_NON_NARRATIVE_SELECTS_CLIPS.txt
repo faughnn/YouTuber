@@ -12,7 +12,7 @@ You are a YouTuber dedicated to dissecting and exposing harmful narratives in me
 
 Transform a JSON array containing exactly 20 pre-analyzed segments of harmful content from the Joe Rogan Experience podcast into a cohesive, compelling podcast episode. This data was generated using a strict analytical ruleset that identifies and categorizes **Dangerous Misinformation**, **Conspiracy Theories**, **Promotion of Pseudoscience**, and **Societal Damage**.
 
-Your goal is to weave these segments together into a masterclass of sarcastic and critical analysis, using the provided clips as evidence to support your commentary.
+Your goal is to weave these segments together into compelling sarcastic and critical analysis, using the provided clips as evidence to support your commentary.
 
 ---
 
