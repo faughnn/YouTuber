@@ -14,6 +14,29 @@ Takes a YouTube URL and produces a professional podcast video through a 7-stage 
 6. **Video Clipping** - Extracts relevant video segments based on analysis
 7. **Video Compilation** - Combines everything into polished final video
 
+### Pipeline Details
+
+#### 1. **Media Extraction**
+Downloads high-quality audio and video from YouTube using yt-dlp. Automatically selects optimal formats and handles various YouTube URL formats, playlists, and age-restricted content. Creates organized directory structure for downstream processing.
+
+#### 2. **Transcript Generation** 
+Creates speaker-diarized transcripts with precise timestamps using OpenAI Whisper and pyannote.audio. Identifies different speakers, segments conversations, and produces JSON output with speaker labels, timing information, and confidence scores for quality filtering.
+
+#### 3. **AI Content Analysis**
+Uses Google Gemini to perform deep content analysis, identifying key discussion points, interesting moments, controversial statements, and thematic elements. Applies sophisticated prompting to extract quotable segments and rank content by engagement potential.
+
+#### 4. **Narrative Generation**
+Creates engaging podcast-style scripts with AI-generated commentary that bridges selected segments. Generates smooth transitions, contextual introductions, and compelling narrative flow while maintaining the authentic voice and perspective of the original content.
+
+#### 5. **Audio Generation**
+Converts generated scripts to natural-sounding speech using either local Chatterbox TTS (free, voice cloning) or premium ElevenLabs API (professional quality). Handles voice matching, pacing, and audio quality optimization for seamless integration.
+
+#### 6. **Video Clipping**
+Extracts relevant video segments based on AI analysis results using FFmpeg. Precisely cuts video clips corresponding to selected transcript segments, maintaining sync between audio and visual elements while optimizing for compilation.
+
+#### 7. **Video Compilation**
+Combines extracted clips, generated audio commentary, and transitions into a polished final video. Handles audio mixing, video transitions, subtitle overlay, and export optimization to create broadcast-ready podcast episodes.
+
 ## ✨ Key Features
 
 - **Two-Pass AI Quality Control** - Advanced filtering system ensures only high-quality segments
