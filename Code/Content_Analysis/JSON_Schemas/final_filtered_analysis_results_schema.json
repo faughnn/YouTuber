@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://youtuberpipeline.com/schemas/final_filtered_analysis_results_schema.json",
+  "title": "Final Filtered Analysis Results Schema",
+  "description": "Schema for Pass 2 filtered analysis results with quality assessment fields",
+  "type": "array",
+  "items": {
+    "allOf": [
+      {
+        "type": "object",
+        "required": [
+          "segment_id",
+          "suggestedClip"
+        ],
+        "properties": {
+          "segment_id": {"type": "string"},
+          "narrativeSegmentTitle": {"type": "string"},
+          "guest_name": {"type": "string"},
+          "primary_speaker_of_quote": {"type": "string"},
+          "severityRating": {"type": "string"},
+          "harm_category": {"type": "object"},
+          "identified_rhetorical_strategies": {"type": "array"},
+          "potential_societal_impacts": {"type": "array"},
+          "confidence_in_classification": {"type": "string"},
+          "brief_reasoning_for_classification": {"type": "string"},
+          "clipContextDescription": {"type": "string"},
+          "suggestedClip": {"type": "array"},
+          "fullerContextTimestamps": {"type": "object"},
+          "segmentDurationInSeconds": {"type": "number"}
+        }
+      },
+      {
+        "type": "object",
+        "required": [
+          "quality_assessment"
+        ],
+        "properties": {
+          "quality_assessment": {
+            "type": "object",
+            "required": [
+              "quote_strength",
+              "factual_accuracy", 
+              "potential_impact",
+              "content_specificity",
+              "context_appropriateness",
+              "quality_score",
+              "selection_reason"
+            ],
+            "properties": {
+              "quote_strength": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 10,
+                "description": "Strength and impact of the quotes (1-10)"
+              },
+              "factual_accuracy": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 10, 
+                "description": "Accuracy of factual claims made (1-10)"
+              },
+              "potential_impact": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 10,
+                "description": "Potential societal impact of the content (1-10)"
+              },
+              "content_specificity": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 10,
+                "description": "Specificity and clarity of harmful content (1-10)"
+              },
+              "context_appropriateness": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 10,
+                "description": "Appropriateness of contextual framing (1-10)"
+              },
+              "quality_score": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 10,
+                "description": "Overall quality score for the segment (1-10)"
+              },
+              "selection_reason": {
+                "type": "string",
+                "description": "Detailed reason why this segment was selected for final output"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    ]
+  }
+}

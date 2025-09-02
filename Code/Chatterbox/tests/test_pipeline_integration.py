@@ -254,8 +254,8 @@ class TestChatterboxPipelineIntegration(unittest.TestCase):
             print("! Content directory not found - skipping real content test")
             return
         
-        # Find real script files
-        real_script_files = list(content_dir.rglob("*/Output/Scripts/unified_podcast_script.json"))
+        # Find real verified script files only
+        real_script_files = list(content_dir.rglob("*/Output/Scripts/verified_unified_script.json"))
         
         if not real_script_files:
             print("! No real script files found - skipping real content test")

@@ -54,8 +54,12 @@ import time
 import re
 from tqdm import tqdm
 
+# Add parent directories to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from Utils.project_paths import get_transcripts_dir
+
 # Define the target directory for transcripts
-TRANSCRIPTS_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Transcripts")
+TRANSCRIPTS_FOLDER = str(get_transcripts_dir())
 
 # Attempt to import whisperx, provide guidance if not found
 try:
@@ -75,7 +79,7 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "tqdm"])
     from tqdm import tqdm
 
-DEFAULT_HF_TOKEN = "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" # Hardcoded default Hugging Face token
+DEFAULT_HF_TOKEN = os.getenv('HuggingFaceToken')  # Hugging Face token from environment variable
 
 def sanitize_audio_filename(name: str) -> str:
     """Cleans a string to be suitable for use as a folder/filename."""

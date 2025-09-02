@@ -1,0 +1,60 @@
+# Pass 2 Quality Assessment Prompt
+# Generated: 2025-01-13 14:35:00
+# Two-Pass AI Quality Control System
+
+## PASS 2 QUALITY ASSESSMENT - EVIDENCE-BASED EVALUATION
+
+**CRITICAL INSTRUCTION:** IGNORE all existing severityRating fields - they are unreliable and must be disregarded completely.
+
+**EVALUATION METHOD:** Evaluate based ONLY on the actual quotes provided in the suggestedClip arrays and clipContextDescription. Score each dimension independently on 1-10 scale.
+
+**CONSERVATIVE APPROACH:** Be conservative - err on the side of exclusion for weak evidence. Only high-quality, well-evidenced segments should receive high scores.
+
+### SCORING DIMENSIONS (1-10 scale):
+
+**1. Quote Strength (1-10):**
+- 9-10: Direct false claims with immediate harmful implications
+- 7-8: Strong implied harm or misleading statements with clear impact
+- 5-6: Questionable statements that could mislead
+- 1-4: Opinion statements or weak evidence
+
+**2. Factual Accuracy (1-10):**
+- 9-10: Verifiably false claims that can be fact-checked
+- 7-8: Misleading but contains some truth elements
+- 5-6: Exaggerated or one-sided presentations
+- 1-4: Opinion-based or subjective statements
+
+**3. Potential Impact (1-10):**
+- 9-10: Could directly influence harmful behavior or major misinformation spread
+- 7-8: Likely to spread misinformation to significant audiences
+- 5-6: May confuse some viewers or contribute to polarization
+- 1-4: Limited impact beyond personal opinion sharing
+
+**4. Content Specificity (1-10):**
+- 9-10: Specific false factual claims with concrete details
+- 7-8: Concrete statements that are debatable but specific
+- 5-6: General statements with some specificity
+- 1-4: Vague opinions or generalizations
+
+**5. Context Appropriateness (1-10):**
+- 9-10: Clear misinformation with no legitimate debate value
+- 7-8: Mostly harmful with some legitimate concerns mixed in
+- 5-6: Mixed aspects - some legitimate discussion points
+- 1-4: Legitimate discussion or debate topic
+
+### WEIGHTED SCORING FORMULA:
+quality_score = (quote_strength × 0.3) + (factual_accuracy × 0.25) + (potential_impact × 0.25) + (content_specificity × 0.1) + (context_appropriateness × 0.1)
+
+### FILTERING THRESHOLDS:
+- Quote Strength: ≥ 6
+- Factual Accuracy: ≥ 5
+- Potential Impact: ≥ 5
+- Content Specificity: ≥ 5
+- Context Appropriateness: ≥ 5
+
+### SELECTION CRITERIA:
+- Final selection: Top 8-12 segments by quality score
+- Minimum requirement: At least 6 segments must pass all thresholds
+- If fewer than 6 segments qualify, reject entire analysis (do not lower standards)
+
+This prompt is designed for evidence-based, conservative evaluation that prioritizes quality over quantity.

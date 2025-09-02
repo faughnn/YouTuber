@@ -26,7 +26,8 @@ def _get_file_organizer():
     try:
         # Try relative import first
         from ..Utils.file_organizer import FileOrganizer
-        return FileOrganizer({'episode_base': 'Content'})
+        from ..Utils.project_paths import get_file_organizer_config
+        return FileOrganizer(get_file_organizer_config())
     except ImportError:
         try:
             # Try adding parent directory to path
@@ -36,7 +37,8 @@ def _get_file_organizer():
             if utils_path not in sys.path:
                 sys.path.insert(0, utils_path)
             from file_organizer import FileOrganizer
-            return FileOrganizer({'episode_base': 'Content'})
+            from project_paths import get_file_organizer_config
+            return FileOrganizer(get_file_organizer_config())
         except ImportError:
             logger.warning("FileOrganizer not available, caching will be disabled")
             return None

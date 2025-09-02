@@ -174,13 +174,13 @@ class TestChatterboxResponseParser(unittest.TestCase):
     
     def test_real_pipeline_data(self):
         """Test with real pipeline data from Content directory."""
-        # Look for real unified_podcast_script.json files
+        # Look for real verified_unified_script.json files only
         content_dir = Path(__file__).parent.parent.parent / "Content"
         
         real_script_files = []
         if content_dir.exists():
-            # Search for unified_podcast_script.json files
-            for episode_dir in content_dir.rglob("*/Output/Scripts/unified_podcast_script.json"):
+            # Search for verified_unified_script.json files only
+            for episode_dir in content_dir.rglob("*/Output/Scripts/verified_unified_script.json"):
                 if episode_dir.exists():
                     real_script_files.append(episode_dir)
         

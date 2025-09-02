@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://youtuberpipeline.com/schemas/original_analysis_results_schema.json",
+  "title": "Original Audio Analysis Results Schema",
+  "description": "Schema for the original analysis results from Pass 1 content analysis",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "segment_id",
+      "narrativeSegmentTitle", 
+      "guest_name",
+      "primary_speaker_of_quote",
+      "clipContextDescription",
+      "suggestedClip",
+      "fullerContextTimestamps"
+    ],
+    "properties": {
+      "segment_id": {
+        "type": "string",
+        "pattern": "^Harmful_Segment_\\d{2}$",
+        "description": "Unique identifier for the segment"
+      },
+      "narrativeSegmentTitle": {
+        "type": "string",
+        "description": "Descriptive title of the harmful segment"
+      },
+      "guest_name": {
+        "type": "string",
+        "description": "Name of the guest or 'No Guest' if solo episode"
+      },
+      "primary_speaker_of_quote": {
+        "type": "string",
+        "description": "Main speaker responsible for the harmful content"
+      },
+      "severityRating": {
+        "type": "string",
+        "description": "Severity level of the harmful content"
+      },
+      "harm_category": {
+        "type": "object",
+        "required": ["primary_type"],
+        "properties": {
+          "primary_type": {
+            "type": "string",
+            "description": "Primary category of harm"
+          },
+          "conspiracy_theme": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Specific conspiracy themes if applicable"
+          },
+          "misinformation_subtype": {
+            "type": "array", 
+            "items": {
+              "type": "string"
+            },
+            "description": "Subtypes of misinformation if applicable"
+          },
+          "pseudoscience_subtype": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Subtypes of pseudoscience if applicable"
+          }
+        },
+        "additionalProperties": false
+      },
+      "identified_rhetorical_strategies": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "List of rhetorical strategies identified in the segment"
+      },
+      "potential_societal_impacts": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Potential negative impacts on society"
+      },
+      "confidence_in_classification": {
+        "type": "string",
+        "description": "Confidence level in the harm classification"
+      },
+      "brief_reasoning_for_classification": {
+        "type": "string",
+        "description": "Brief explanation of why this content is classified as harmful"
+      },
+      "quote_verification_note": {
+        "type": "string",
+        "description": "Verification note confirming that harmful content is explicitly present in extracted quotes"
+      },
+      "clipContextDescription": {
+        "type": "string",
+        "description": "Context description of the clip and surrounding conversation"
+      },
+      "suggestedClip": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["timestamp", "speaker", "quote"],
+          "properties": {
+            "timestamp": {
+              "type": "number",
+              "description": "Timestamp in seconds from start of audio"
+            },
+            "speaker": {
+              "type": "string",
+              "description": "Name of the speaker or speaker identifier"
+            },
+            "quote": {
+              "type": "string",
+              "description": "Exact quote from the speaker"
+            }
+          },
+          "additionalProperties": false
+        },
+        "description": "Array of timestamped quotes that make up the suggested clip"
+      },
+      "fullerContextTimestamps": {
+        "type": "object",
+        "required": ["start", "end"],
+        "properties": {
+          "start": {
+            "type": "number",
+            "description": "Start timestamp in seconds for fuller context"
+          },
+          "end": {
+            "type": "number", 
+            "description": "End timestamp in seconds for fuller context"
+          }
+        },
+        "additionalProperties": false
+      },
+      "segmentDurationInSeconds": {
+        "type": "number",
+        "description": "Duration of the segment in seconds"
+      }
+    },
+    "additionalProperties": false
+  }
+}

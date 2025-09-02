@@ -6,9 +6,10 @@ Just run: python simple_tts.py
 
 from elevenlabs import VoiceSettings, play, save
 from elevenlabs.client import ElevenLabs
+import os
 
 # Set your API key here
-API_KEY = "sk_4d8758bd390fca4761ac396a13ebc6956525d324701e3aa3"
+API_KEY = os.getenv('ELEVENLABS_API_KEY')
 
 def main():
     print("🎤 Simple ElevenLabs TTS")

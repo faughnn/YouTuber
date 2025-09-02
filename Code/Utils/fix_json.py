@@ -1,8 +1,24 @@
 import re
 import json
+import sys
+import os
+
+# Add project paths for portable path discovery
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from project_paths import get_transcripts_dir
+
+# Use discoverable path instead of hardcoded absolute path
+transcripts_dir = get_transcripts_dir()
+sample_file = transcripts_dir / "Joe_Rogan_Experience" / "Joe Rogan Experience 2325 - Aaron Rodgers" / "Joe_Rogan_Experience_2325_TOP10_WORST.txt"
+
+# Check if file exists before trying to read it
+if not sample_file.exists():
+    print(f"Sample file not found at: {sample_file}")
+    print("This debug utility requires existing episode data to work.")
+    sys.exit(1)
 
 # Read the analysis file
-with open(r"c:\Users\nfaug\OneDrive - LIR\Desktop\YouTuber\Transcripts\Joe_Rogan_Experience\Joe Rogan Experience 2325 - Aaron Rodgers\Joe_Rogan_Experience_2325_TOP10_WORST.txt", 'r', encoding='utf-8') as f:
+with open(sample_file, 'r', encoding='utf-8') as f:
     content = f.read()
 
 # Extract JSON content

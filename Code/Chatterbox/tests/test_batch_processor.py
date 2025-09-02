@@ -134,7 +134,7 @@ class TestChatterboxBatchProcessor(unittest.TestCase):
     def test_script_file_creation_and_processing(self):
         """Test creating script file and processing it."""
         # Create test script file
-        script_file_path = os.path.join(self.temp_dir, "unified_podcast_script.json")
+        script_file_path = os.path.join(self.temp_dir, "verified_unified_script.json")
         with open(script_file_path, 'w', encoding='utf-8') as f:
             json.dump(self.sample_episode_data, f, indent=2)
         
@@ -180,8 +180,8 @@ class TestChatterboxBatchProcessor(unittest.TestCase):
         
         real_script_files = []
         if content_dir.exists():
-            # Search for unified_podcast_script.json files
-            for episode_dir in content_dir.rglob("*/Output/Scripts/unified_podcast_script.json"):
+            # Search for verified_unified_script.json files only
+            for episode_dir in content_dir.rglob("*/Output/Scripts/verified_unified_script.json"):
                 if episode_dir.exists():
                     real_script_files.append(episode_dir)
         

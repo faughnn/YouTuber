@@ -12,6 +12,10 @@ from pathlib import Path
 # Add the parent directory to Python path
 sys.path.append(str(Path(__file__).parent.parent))
 
+# Import project paths for portable path discovery
+sys.path.append(str(Path(__file__).parent.parent / "Utils"))
+from project_paths import get_content_dir
+
 from Video_Compilator import SimpleCompiler
 
 
@@ -31,8 +35,9 @@ def test_joe_rogan_compilation():
         validate_segments=True    # Validate segments as specified
     )
     
-    # Episode path
-    episode_path = Path("C:/Users/nfaug/OneDrive - LIR/Desktop/YouTuber/Content/Joe_Rogan_Experience/Joe Rogan Experience #2330 - Bono")
+    # Episode path (using discoverable paths)
+    content_dir = get_content_dir()
+    episode_path = content_dir / "Joe_Rogan_Experience" / "Joe Rogan Experience #2330 - Bono"
     
     if not episode_path.exists():
         print(f"✗ Episode directory not found: {episode_path}")

@@ -774,9 +774,9 @@ class MasterProcessorV2:
             # Direct call to working module with progress spinner
             with self.enhanced_logger.spinner("Initializing audio diarization"):
                 time.sleep(0.5)  # Brief pause for UI
-                hf_token = self.config.get('api', {}).get('huggingface_token', None)
+                hf_token = self.config.get('api', {}).get('huggingface_token') or os.getenv('HuggingFaceToken')
                 if not hf_token:
-                    self.enhanced_logger.warning("No HuggingFace token found in config")
+                    self.enhanced_logger.warning("No HuggingFace token found in config or environment variables")
             
             self.enhanced_logger.info("Starting audio diarization and transcription...")
             with self.enhanced_logger.spinner("Processing audio with AI models"):
@@ -814,105 +814,33 @@ class MasterProcessorV2:
     
     def _stage_3_content_analysis(self, transcript_path: str) -> str:
         """
-        Stage 3: Direct call to analyze_with_gemini_file_upload() with caching.
+        Stage 3: Two-Pass AI Quality Control System (Pass 1 Analysis only for compatibility).
+        
+        This method now delegates to the Two-Pass Controller but returns the Pass 1
+        analysis path for backward compatibility with existing pipeline stages.
         
         Args:
             transcript_path: Path to transcript file
             
         Returns:
-            str: Analysis result file path
+            str: Pass 1 analysis result file path (for compatibility)
         """
-        
         try:
-            # Validate transcript file exists
-            if not os.path.exists(transcript_path):
-                self.enhanced_logger.error(f"Transcript file not found: [red]{transcript_path}[/red]")
-                raise Exception(f"Transcript file not found: {transcript_path}")
+            # Import two-pass controller
+            from Content_Analysis.two_pass_controller import create_two_pass_controller
             
-            transcript_size = os.path.getsize(transcript_path) / 1024  # KB
-            self.enhanced_logger.info(f"Processing transcript: [cyan]{os.path.basename(transcript_path)}[/cyan] ({transcript_size:.1f} KB)")
-            
-            # Check if analysis already exists
-            processing_dir = os.path.join(self.episode_dir, "Processing")
-            analysis_filename = "original_audio_analysis_results.json"
-            analysis_file_path = os.path.join(processing_dir, analysis_filename)
-            
-            if os.path.exists(analysis_file_path):
-                self.enhanced_logger.warning("Analysis results already exist, using cached version")
-                self.enhanced_logger.success(f"Using existing analysis: [green]{analysis_filename}[/green]")
-                return analysis_file_path
-            
-            # Ensure Processing directory exists
-            if not os.path.exists(processing_dir):
-                os.makedirs(processing_dir)
-            
-            # Configure Gemini API with the key from config
-            with self.enhanced_logger.spinner("Initializing Gemini AI"):
-                time.sleep(0.5)  # Brief pause for UI
-                api_key = self.config['api']['gemini_api_key']
-                import google.generativeai as genai
-                genai.configure(api_key=api_key)
-            
-            # Load and upload transcript to Gemini
-            self.enhanced_logger.info("Uploading transcript to Gemini AI...")
-            with self.enhanced_logger.spinner("Uploading transcript data"):
-                from Content_Analysis.transcript_analyzer import upload_transcript_to_gemini
-                display_name = f"transcript_{os.path.basename(transcript_path)}"
-                file_object = upload_transcript_to_gemini(transcript_path, display_name)
-                
-                if not file_object:
-                    self.enhanced_logger.error("Failed to upload transcript to Gemini")
-                    raise Exception("Failed to upload transcript to Gemini")
-            
-            # Load analysis rules from file
-            rules_path = os.path.join(
-                os.path.dirname(__file__), 
-                'Content_Analysis', 
-                'Analysis_Guidelines', 
-                'Joe_Rogan_selective_analysis_rules.txt'
+            # Create controller instance
+            controller = create_two_pass_controller(
+                config=self.config,
+                episode_dir=self.episode_dir,
+                enhanced_logger=self.enhanced_logger
             )
             
-            analysis_rules = ""
-            if os.path.exists(rules_path):
-                with open(rules_path, 'r', encoding='utf-8') as f:
-                    analysis_rules = f.read()
-                rules_size = len(analysis_rules) / 1024  # KB
-                self.enhanced_logger.info(f"Loaded analysis rules: [cyan]{rules_size:.1f} KB[/cyan]")
-            else:
-                self.enhanced_logger.warning(f"Analysis rules file not found: [yellow]{rules_path}[/yellow]")
+            # Execute Pass 1 only (for backward compatibility with stage 4)
+            pass1_output = controller._execute_pass_1_analysis(transcript_path)
             
-            # Perform content analysis with progress indication
-            self.enhanced_logger.info("Starting AI content analysis...")
-            with self.enhanced_logger.spinner("Analyzing content with Gemini AI (this may take a few minutes)"):
-                analysis_content = analyze_with_gemini_file_upload(
-                    file_object, 
-                    analysis_rules,  # Use loaded rules instead of empty string
-                    processing_dir,
-                    transcript_path  # Pass the transcript file path for name extraction
-                )
-            
-            if not analysis_content:
-                self.enhanced_logger.error("Analysis failed - no content returned")
-                raise Exception("Analysis failed - no content returned")
-            
-            # Save analysis results
-            with self.enhanced_logger.spinner("Saving analysis results"):
-                with open(analysis_file_path, 'w', encoding='utf-8') as f:
-                    f.write(analysis_content)
-            
-            # Validate analysis file exists
-            if not os.path.exists(analysis_file_path):
-                self.enhanced_logger.error(f"Generated analysis file not found: {analysis_file_path}")
-                raise Exception(f"Generated analysis file not found: {analysis_file_path}")
-            
-            # Show completion summary
-            analysis_size = os.path.getsize(analysis_file_path) / 1024  # KB
-            
-            self.enhanced_logger.success("Content analysis completed successfully!")
-            self.enhanced_logger.info(f"• Output file: [green]{analysis_filename}[/green]")
-            self.enhanced_logger.info(f"• Analysis size: [cyan]{analysis_size:.1f} KB[/cyan]")
-            
-            return analysis_file_path
+            self.enhanced_logger.success("Two-Pass Stage 3 (Pass 1) completed successfully!")
+            return pass1_output
             
         except Exception as e:
             self.enhanced_logger.error(f"Stage 3 failed: [red]{str(e)}[/red]")
@@ -920,83 +848,54 @@ class MasterProcessorV2:
     
     def _stage_4_narrative_generation(self, analysis_path: str, narrative_format: str = "with_hook") -> str:
         """
-        Stage 4: Direct call to NarrativeCreatorGenerator.generate_unified_narrative().
+        Stage 4: Two-Pass AI Quality Control System (Complete Pipeline).
+        
+        This method now executes the complete two-pass pipeline starting from Pass 1 output,
+        including Pass 2 quality assessment, script generation, and rebuttal verification.
         
         Args:
-            analysis_path: Path to analysis file
+            analysis_path: Path to Pass 1 analysis file
             narrative_format: Format for narrative generation ("with_hook" or "without_hook")
             
         Returns:
-            str: Unified podcast script file path
+            str: Verified unified podcast script file path (final output)
         """
-        
         try:
-            # Check if unified script already exists
-            expected_script_path = os.path.join(self.episode_dir, "Output", "Scripts", "unified_podcast_script.json")
-            if os.path.exists(expected_script_path):
-                self.enhanced_logger.warning("Unified script already exists, using cached version")
-                self.enhanced_logger.success(f"Using existing script: [green]{os.path.basename(expected_script_path)}[/green]")
-                return expected_script_path
+            # Import two-pass controller
+            from Content_Analysis.two_pass_controller import create_two_pass_controller
             
-            # Validate analysis file exists
-            if not os.path.exists(analysis_path):
-                self.enhanced_logger.error(f"Analysis file not found: [red]{analysis_path}[/red]")
-                raise Exception(f"Analysis file not found: {analysis_path}")
+            # Create controller instance
+            controller = create_two_pass_controller(
+                config=self.config,
+                episode_dir=self.episode_dir,
+                enhanced_logger=self.enhanced_logger
+            )
             
-            analysis_size = os.path.getsize(analysis_path) / 1024  # KB
-            self.enhanced_logger.info(f"Processing analysis: [cyan]{os.path.basename(analysis_path)}[/cyan] ({analysis_size:.1f} KB)")
+            # Execute Pass 2, Script Generation, and Verification starting from Pass 1 output
+            self.enhanced_logger.info("🎯 Starting Two-Pass Pipeline from Pass 1 output...")
             
-            # Generate episode title from directory name
-            episode_title = os.path.basename(self.episode_dir)
-            self.enhanced_logger.info(f"Episode title: [yellow]{episode_title}[/yellow]")
+            # Execute Pass 2: Quality Assessment
+            with self.enhanced_logger.stage_context("analysis"):
+                pass2_output = controller._execute_pass_2_quality(analysis_path)
             
-            # Initialize narrative generator
-            with self.enhanced_logger.spinner("Initializing narrative generator"):
-                time.sleep(0.5)  # Brief pause for UI
-                generator = NarrativeCreatorGenerator()
+            # Execute Script Generation
+            with self.enhanced_logger.stage_context("generation"):
+                script_output = controller._execute_script_generation(pass2_output, narrative_format)
             
-            # Generate unified narrative with progress indication
-            self.enhanced_logger.info("Starting narrative generation...")
-            with self.enhanced_logger.spinner("Generating unified podcast narrative (this may take a few minutes)"):
-                script_data = generator.generate_unified_narrative(analysis_path, episode_title, narrative_format)
+            # Execute Rebuttal Verification
+            with self.enhanced_logger.stage_context("generation"):
+                verified_output = controller._execute_rebuttal_verification(script_output)
             
-            # Save script to Output/Scripts directory
-            with self.enhanced_logger.spinner("Saving generated script"):
-                output_dir = os.path.join(self.episode_dir, "Output")
-                script_path = generator.save_unified_script(script_data, output_dir)
+            self.enhanced_logger.success("Two-Pass Pipeline completed successfully!")
+            self.enhanced_logger.info(f"Final verified script: [green]{os.path.basename(verified_output)}[/green]")
             
-            # Convert Path object to string and validate script file exists
-            script_path_str = str(script_path)
-            if not os.path.exists(script_path_str):
-                self.enhanced_logger.error(f"Generated script file not found: {script_path_str}")
-                raise Exception(f"Generated script file not found: {script_path_str}")
-            
-            # Show completion summary
-            script_size = os.path.getsize(script_path_str) / 1024  # KB
-            
-            # Try to extract some basic stats from the script
-            try:
-                with open(script_path_str, 'r', encoding='utf-8') as f:
-                    script_content = json.load(f)
-                    num_segments = len(script_content.get('segments', []))
-                    total_duration = sum(seg.get('duration', 0) for seg in script_content.get('segments', []))
-            except:
-                num_segments = "Unknown"
-                total_duration = 0
-            
-            self.enhanced_logger.success("Narrative generation completed successfully!")
-            self.enhanced_logger.info(f"• Output file: [green]{os.path.basename(script_path_str)}[/green]")
-            self.enhanced_logger.info(f"• Script size: [cyan]{script_size:.1f} KB[/cyan]")
-            if num_segments != "Unknown":
-                self.enhanced_logger.info(f"• Script segments: [yellow]{num_segments}[/yellow]")
-                if total_duration > 0:
-                    self.enhanced_logger.info(f"• Estimated duration: [blue]{total_duration/60:.1f} minutes[/blue]")
-            
-            return script_path_str
+            # For backward compatibility, return the verified script path
+            # This ensures existing TTS stages receive the final, verified script
+            return verified_output
             
         except Exception as e:
             self.enhanced_logger.error(f"Stage 4 failed: [red]{str(e)}[/red]")
-            raise Exception(f"Narrative generation failed: {e}")
+            raise Exception(f"Two-pass narrative generation failed: {e}")
 
     def _stage_5_audio_generation(self, script_path: str, tts_provider: str = "chatterbox") -> Dict:
         """

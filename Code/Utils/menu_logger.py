@@ -31,7 +31,12 @@ class MenuLogger:
     
     def __init__(self):
         """Initialize the menu logger."""
-        self.console = Console()
+        # Force UTF-8 encoding for Windows console compatibility
+        import sys
+        if sys.platform == "win32":
+            self.console = Console(force_terminal=True, legacy_windows=False)
+        else:
+            self.console = Console()
         
     def show_main_menu(self, youtube_url=None):
         """
@@ -196,8 +201,8 @@ class MenuLogger:
     def show_narrative_format_menu(self):
         """Display menu for selecting narrative format."""
         menu_content = (
-            "[cyan bold]1[/]  Narrative with Opening Hook (tts_podcast_narrative_prompt.txt)\n"
-            "[cyan bold]2[/]  Narrative WITHOUT Opening Hook (tts_podcast_narrative_prompt_WITHOUT_HOOK.txt)\n"
+            "[cyan bold]1[/]  Narrative with normal format (tts_podcast_narrative_prompt_WITHOUT_HOOK.txt)\n"
+            "[cyan bold]2[/]  Narrative with Opening Hook (tts_podcast_narrative_prompt.txt)\n"
             "\n"
             "[cyan bold]0[/]  [bold red]Cancel[/]"
         )

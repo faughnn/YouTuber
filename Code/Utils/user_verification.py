@@ -15,11 +15,13 @@ from typing import Dict, Tuple
 try:
     from .file_organizer import FileOrganizer
     from .config_manager import get_config
+    from .project_paths import get_file_organizer_config, get_config_file
 except ImportError:
     # This allows the script to be run directly for testing
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
     from Utils.file_organizer import FileOrganizer
     from Utils.config_manager import get_config
+    from Utils.project_paths import get_file_organizer_config, get_config_file
 
 class UserVerification:
     """Handles user interaction for verifying and correcting extracted names."""
@@ -139,7 +141,7 @@ class UserVerification:
             from .file_organizer import FileOrganizer
             
             # Get the paths but don't create directories yet
-            temp_organizer = FileOrganizer({'episode_base': 'Content'})
+            temp_organizer = FileOrganizer(get_file_organizer_config())
             
             # Calculate what the paths WOULD be (without creating them)
             title = metadata.get('title', 'Unknown Title')
@@ -181,24 +183,36 @@ class UserVerification:
         print(f"Original: Host='{original_names['host']}', Guest='{original_names['guest']}'")
         print(f"Corrected: Host='{corrected_names['host']}', Guest='{corrected_names['guest']}'")
         
-        # Analyze the correction pattern
-        suggested_rule = UserVerification._analyze_correction_pattern(title, corrected_names['guest'])
-        
-        if suggested_rule:
-            print(f"\n💡 Suggested rule for '{uploader}':")
-            print(f"   Strategy: {suggested_rule['strategy']}")
-            print(f"   Parameter: '{suggested_rule['parameter']}'")
+        # Check if host name was changed (host mapping needed)
+        if original_names['host'] != corrected_names['host']:
+            save_host_mapping = input(f"\n💾 Save host mapping '{uploader}' → '{corrected_names['host']}' for future videos? (y/n): ").strip().lower()
             
-            save_rule = input(f"\n💾 Save this rule for future videos from '{uploader}'? (y/n): ").strip().lower()
-            
-            if save_rule in ['y', 'yes']:
-                UserVerification._save_new_rule(uploader, suggested_rule)
-                print("✅ Rule saved successfully!")
+            if save_host_mapping in ['y', 'yes']:
+                UserVerification._save_host_mapping(uploader, corrected_names['host'])
+                print("✅ Host mapping saved successfully!")
             else:
-                print("⏭️ Rule not saved.")
-        else:
-            print("\n❓ Could not determine a clear pattern from your correction.")
-            print("   Consider manually adding a rule to the configuration file.")
+                print("⏭️ Host mapping not saved.")
+        
+        # Check if guest extraction pattern needs a rule (only if guest was changed)
+        if original_names['guest'] != corrected_names['guest']:
+            # Analyze the correction pattern
+            suggested_rule = UserVerification._analyze_correction_pattern(title, corrected_names['guest'])
+            
+            if suggested_rule:
+                print(f"\n💡 Suggested guest extraction rule for '{uploader}':")
+                print(f"   Strategy: {suggested_rule['strategy']}")
+                print(f"   Parameter: '{suggested_rule['parameter']}'")
+                
+                save_rule = input(f"\n💾 Save this guest extraction rule for future videos from '{uploader}'? (y/n): ").strip().lower()
+                
+                if save_rule in ['y', 'yes']:
+                    UserVerification._save_new_rule(uploader, suggested_rule)
+                    print("✅ Guest extraction rule saved successfully!")
+                else:
+                    print("⏭️ Guest extraction rule not saved.")
+            else:
+                print("\n❓ Could not determine a clear pattern from your guest correction.")
+                print("   Consider manually adding a rule to the configuration file.")
     
     @staticmethod
     def _analyze_correction_pattern(title: str, corrected_guest: str) -> Dict[str, str]:
@@ -238,6 +252,40 @@ class UserVerification:
         return None
     
     @staticmethod
+    def _save_host_mapping(uploader: str, host_name: str) -> None:
+        """
+        Save a new host name mapping to the configuration file.
+        
+        Args:
+            uploader: Channel/uploader name
+            host_name: Friendly host name to map to
+        """
+        try:
+            # Get config path using centralized path discovery
+            config_path = str(get_config_file('name_extractor_rules.json'))
+            
+            # Load current config
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            
+            # Add new host mapping
+            if 'host_mappings' not in config:
+                config['host_mappings'] = {}
+            
+            config['host_mappings'][uploader] = host_name
+            
+            # Save updated config
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            
+            # Reload config to clear cache
+            from .config_manager import reload_config
+            reload_config()
+                
+        except Exception as e:
+            print(f"❌ Error saving host mapping: {e}")
+    
+    @staticmethod
     def _save_new_rule(uploader: str, rule: Dict[str, str]) -> None:
         """
         Save a new uploader-specific rule to the configuration file.
@@ -247,7 +295,8 @@ class UserVerification:
             rule: Rule definition
         """
         try:
-            config_path = os.path.abspath('Code/Config/name_extractor_rules.json')
+            # Get config path using centralized path discovery
+            config_path = str(get_config_file('name_extractor_rules.json'))
             
             # Load current config
             with open(config_path, 'r', encoding='utf-8') as f:
@@ -269,6 +318,10 @@ class UserVerification:
             # Save updated config
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
+            
+            # Reload config to clear cache
+            from .config_manager import reload_config
+            reload_config()
                 
         except Exception as e:
             print(f"❌ Error saving rule: {e}")

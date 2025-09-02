@@ -12,6 +12,10 @@ from pathlib import Path
 # Add the parent directory to Python path
 sys.path.append(str(Path(__file__).parent.parent))
 
+# Import project paths for portable path discovery
+sys.path.append(str(Path(__file__).parent.parent / "Utils"))
+from project_paths import get_content_dir
+
 from Video_Compilator import SimpleCompiler, AudioToVideoConverter, DirectConcatenator
 
 
@@ -25,8 +29,9 @@ def example_basic_compilation():
         validate_segments=True   # Validate segments before concatenation
     )
     
-    # Path to the episode directory
-    episode_path = Path("C:/Users/nfaug/OneDrive - LIR/Desktop/YouTuber/Content/Joe_Rogan_Experience/Joe Rogan Experience #2330 - Bono")
+    # Path to the episode directory (using discoverable paths)
+    content_dir = get_content_dir()
+    episode_path = content_dir / "Joe_Rogan_Experience" / "Joe Rogan Experience #2330 - Bono"
     
     if episode_path.exists():
         print(f"Compiling episode: {episode_path.name}")
@@ -55,7 +60,8 @@ def example_audio_conversion_only():
     converter = AudioToVideoConverter()
     
     # Example audio file (if it exists)
-    episode_path = Path("C:/Users/nfaug/OneDrive - LIR/Desktop/YouTuber/Content/Joe_Rogan_Experience/Joe Rogan Experience #2330 - Bono")
+    content_dir = get_content_dir()
+    episode_path = content_dir / "Joe_Rogan_Experience" / "Joe Rogan Experience #2330 - Bono"
     audio_dir = episode_path / "Output" / "Audio"
     
     if not audio_dir.exists():
@@ -88,7 +94,8 @@ def example_direct_concatenation():
     concatenator = DirectConcatenator()
     
     # Example: Create some test segments (this is just for demonstration)
-    episode_path = Path("C:/Users/nfaug/OneDrive - LIR/Desktop/YouTuber/Content/Joe_Rogan_Experience/Joe Rogan Experience #2330 - Bono")
+    content_dir = get_content_dir()
+    episode_path = content_dir / "Joe_Rogan_Experience" / "Joe Rogan Experience #2330 - Bono"
     
     # Look for video files
     video_files = []
@@ -130,7 +137,8 @@ def example_with_custom_settings():
         validate_segments=True    # Still validate for safety
     )
     
-    episode_path = Path("C:/Users/nfaug/OneDrive - LIR/Desktop/YouTuber/Content/Joe_Rogan_Experience/Joe Rogan Experience #2330 - Bono")
+    content_dir = get_content_dir()
+    episode_path = content_dir / "Joe_Rogan_Experience" / "Joe Rogan Experience #2330 - Bono"
     
     if episode_path.exists():
         # Custom output filename

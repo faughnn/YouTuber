@@ -1,0 +1,308 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://youtuberpipeline.com/schemas/quality_control_results_schemas.json",
+  "title": "Quality Control Results Schemas",
+  "description": "Collection of schemas for quality control test results preservation",
+  
+  "definitions": {
+    "quality_scores_schema": {
+      "$id": "#quality_scores",
+      "type": "object",
+      "required": [
+        "episode_id",
+        "processing_timestamp",
+        "segment_scores"
+      ],
+      "properties": {
+        "episode_id": {
+          "type": "string",
+          "description": "Unique identifier for the episode"
+        },
+        "processing_timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of quality scoring"
+        },
+        "segment_scores": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "segment_id",
+              "quality_dimensions"
+            ],
+            "properties": {
+              "segment_id": {
+                "type": "string",
+                "pattern": "^Harmful_Segment_\\d{2}$"
+              },
+              "quality_dimensions": {
+                "type": "object",
+                "required": [
+                  "quote_strength",
+                  "factual_accuracy",
+                  "potential_impact",
+                  "content_specificity",
+                  "context_appropriateness",
+                  "overall_score"
+                ],
+                "properties": {
+                  "quote_strength": {"type": "number", "minimum": 1, "maximum": 10},
+                  "factual_accuracy": {"type": "number", "minimum": 1, "maximum": 10},
+                  "potential_impact": {"type": "number", "minimum": 1, "maximum": 10},
+                  "content_specificity": {"type": "number", "minimum": 1, "maximum": 10},
+                  "context_appropriateness": {"type": "number", "minimum": 1, "maximum": 10},
+                  "overall_score": {"type": "number", "minimum": 1, "maximum": 10}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    
+    "filtering_decisions_schema": {
+      "$id": "#filtering_decisions",
+      "type": "object",
+      "required": [
+        "episode_id",
+        "filtering_timestamp",
+        "filtering_criteria",
+        "decisions"
+      ],
+      "properties": {
+        "episode_id": {
+          "type": "string",
+          "description": "Unique identifier for the episode"
+        },
+        "filtering_timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "filtering_criteria": {
+          "type": "object",
+          "required": [
+            "minimum_quality_score",
+            "severity_threshold",
+            "max_segments_selected"
+          ],
+          "properties": {
+            "minimum_quality_score": {"type": "number", "minimum": 1, "maximum": 10},
+            "severity_threshold": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
+            "max_segments_selected": {"type": "integer", "minimum": 1}
+          }
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "segment_id",
+              "decision",
+              "reasoning"
+            ],
+            "properties": {
+              "segment_id": {"type": "string", "pattern": "^Harmful_Segment_\\d{2}$"},
+              "decision": {"type": "string", "enum": ["SELECTED", "REJECTED"]},
+              "reasoning": {"type": "string"},
+              "quality_score": {"type": "number", "minimum": 1, "maximum": 10},
+              "severity_level": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]}
+            }
+          }
+        }
+      }
+    },
+    
+    "selection_rationale_schema": {
+      "$id": "#selection_rationale", 
+      "type": "object",
+      "required": [
+        "episode_id",
+        "selection_timestamp",
+        "selection_strategy",
+        "selected_segments"
+      ],
+      "properties": {
+        "episode_id": {"type": "string"},
+        "selection_timestamp": {"type": "string", "format": "date-time"},
+        "selection_strategy": {
+          "type": "object",
+          "required": ["strategy_name", "strategy_description"],
+          "properties": {
+            "strategy_name": {"type": "string"},
+            "strategy_description": {"type": "string"},
+            "parameters": {"type": "object"}
+          }
+        },
+        "selected_segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "segment_id",
+              "selection_priority",
+              "rationale"
+            ],
+            "properties": {
+              "segment_id": {"type": "string", "pattern": "^Harmful_Segment_\\d{2}$"},
+              "selection_priority": {"type": "integer", "minimum": 1},
+              "rationale": {"type": "string"},
+              "narrative_fit": {"type": "number", "minimum": 1, "maximum": 10},
+              "audience_impact": {"type": "number", "minimum": 1, "maximum": 10}
+            }
+          }
+        }
+      }
+    },
+    
+    "rebuttal_scores_schema": {
+      "$id": "#rebuttal_scores",
+      "type": "object", 
+      "required": [
+        "episode_id",
+        "scoring_timestamp",
+        "rebuttal_assessments"
+      ],
+      "properties": {
+        "episode_id": {"type": "string"},
+        "scoring_timestamp": {"type": "string", "format": "date-time"},
+        "rebuttal_assessments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "segment_id",
+              "section_id",
+              "rebuttal_type",
+              "scores"
+            ],
+            "properties": {
+              "segment_id": {"type": "string", "pattern": "^Harmful_Segment_\\d{2}$"},
+              "section_id": {"type": "string"},
+              "rebuttal_type": {"type": "string", "enum": ["pre_clip", "post_clip"]},
+              "scores": {
+                "type": "object",
+                "required": [
+                  "accuracy",
+                  "completeness",
+                  "persuasiveness",
+                  "clarity",
+                  "overall_effectiveness"
+                ],
+                "properties": {
+                  "accuracy": {"type": "number", "minimum": 1, "maximum": 10},
+                  "completeness": {"type": "number", "minimum": 1, "maximum": 10},
+                  "persuasiveness": {"type": "number", "minimum": 1, "maximum": 10},
+                  "clarity": {"type": "number", "minimum": 1, "maximum": 10},
+                  "overall_effectiveness": {"type": "number", "minimum": 1, "maximum": 10}
+                }
+              },
+              "scoring_notes": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    
+    "rewriting_actions_schema": {
+      "$id": "#rewriting_actions",
+      "type": "object",
+      "required": [
+        "episode_id", 
+        "rewriting_timestamp",
+        "rewriting_actions"
+      ],
+      "properties": {
+        "episode_id": {"type": "string"},
+        "rewriting_timestamp": {"type": "string", "format": "date-time"},
+        "rewriting_actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "segment_id",
+              "section_id",
+              "action_type",
+              "original_content",
+              "revised_content",
+              "revision_reasoning"
+            ],
+            "properties": {
+              "segment_id": {"type": "string", "pattern": "^Harmful_Segment_\\d{2}$"},
+              "section_id": {"type": "string"},
+              "action_type": {
+                "type": "string", 
+                "enum": [
+                  "factual_correction",
+                  "clarity_improvement",
+                  "completeness_enhancement",
+                  "persuasiveness_boost",
+                  "bias_reduction"
+                ]
+              },
+              "original_content": {"type": "string"},
+              "revised_content": {"type": "string"},
+              "revision_reasoning": {"type": "string"},
+              "improvement_score": {"type": "number", "minimum": 1, "maximum": 10}
+            }
+          }
+        }
+      }
+    },
+    
+    "final_verification_schema": {
+      "$id": "#final_verification",
+      "type": "object",
+      "required": [
+        "episode_id",
+        "verification_timestamp",
+        "verification_agent",
+        "verification_results"
+      ],
+      "properties": {
+        "episode_id": {"type": "string"},
+        "verification_timestamp": {"type": "string", "format": "date-time"},
+        "verification_agent": {"type": "string"},
+        "verification_results": {
+          "type": "object",
+          "required": [
+            "overall_quality_score",
+            "verification_passed",
+            "issues_identified",
+            "improvements_made"
+          ],
+          "properties": {
+            "overall_quality_score": {"type": "number", "minimum": 1, "maximum": 10},
+            "verification_passed": {"type": "boolean"},
+            "issues_identified": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["issue_type", "section_id", "description", "severity"],
+                "properties": {
+                  "issue_type": {"type": "string"},
+                  "section_id": {"type": "string"},
+                  "description": {"type": "string"},
+                  "severity": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]}
+                }
+              }
+            },
+            "improvements_made": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["improvement_type", "section_id", "description"],
+                "properties": {
+                  "improvement_type": {"type": "string"},
+                  "section_id": {"type": "string"}, 
+                  "description": {"type": "string"},
+                  "quality_improvement": {"type": "number", "minimum": 0, "maximum": 10}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

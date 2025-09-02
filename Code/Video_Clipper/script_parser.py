@@ -52,7 +52,7 @@ class UnifiedScriptParser:
         Parse unified podcast script file and extract video clip specifications.
         
         Args:
-            script_path: Path to the unified_podcast_script.json file
+            script_path: Path to the verified_unified_script.json file (two-pass quality control required)
             
         Returns:
             List of VideoClipSpec objects for video clips found in script
@@ -175,9 +175,11 @@ class UnifiedScriptParser:
                 
                 timestamp_str = str(clip_entry['timestamp'])
                 try:
+                    # Strip brackets if present [2631.347] -> 2631.347
+                    clean_timestamp = timestamp_str.strip('[]')
                     # Convert to float for comparison
-                    timestamp_float = float(timestamp_str)
-                    timestamps.append((timestamp_float, timestamp_str))
+                    timestamp_float = float(clean_timestamp)
+                    timestamps.append((timestamp_float, clean_timestamp))
                 except ValueError:
                     raise ValueError(f"Invalid timestamp format in suggestedClip entry {i}: {timestamp_str}")
             
@@ -246,8 +248,8 @@ class UnifiedScriptParser:
         if not timestamp:
             raise ValueError("Empty timestamp")
         
-        # Remove any whitespace
-        timestamp = timestamp.strip()
+        # Remove any whitespace and brackets
+        timestamp = timestamp.strip().strip('[]')
         
         # Check for decimal seconds format first (64.821, 3846.508)
         try:

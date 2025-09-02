@@ -106,22 +106,28 @@ class DirectConcatenator:
                 all_inputs.extend(['-i', str(segment)])
                 self.logger.debug(f"Input {input_index}: {segment.name}")
             
-            # Build filter complex with individual loudnorm for each segment
+            # Build filter complex with video scaling, audio normalization, and concatenation
+            video_filters = []
             audio_filters = []
             concat_inputs = []
             
             for i in range(len(segment_sequence)):
+                # Scale all videos to 1920x1080 to handle dimension mismatches
+                video_filters.append(
+                    f'[{i}:v:0]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black[v{i}]'
+                )
                 # Apply loudnorm to each segment's audio
                 audio_filters.append(
                     f'[{i}:a:0]loudnorm=I={target_lufs}:LRA={loudness_range}:TP={true_peak}[a{i}]'
                 )
-                # Prepare for concat (video + normalized audio)
-                concat_inputs.append(f'[{i}:v:0][a{i}]')
+                # Prepare for concat (scaled video + normalized audio)
+                concat_inputs.append(f'[v{i}][a{i}]')
             
-            # Complete filter complex: individual normalization + concatenation
+            # Complete filter complex: scaling + normalization + concatenation
             filter_complex = (
-                ';'.join(audio_filters) + ';' +  # Individual loudnorm filters
-                ''.join(concat_inputs) +          # Concat inputs (video + normalized audio)
+                ';'.join(video_filters) + ';' +   # Video scaling filters
+                ';'.join(audio_filters) + ';' +   # Individual loudnorm filters
+                ''.join(concat_inputs) +          # Concat inputs (scaled video + normalized audio)
                 f'concat=n={len(segment_sequence)}:v=1:a=1[outv][outa]'  # Concatenation
             )
             

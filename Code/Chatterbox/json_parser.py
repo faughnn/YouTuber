@@ -86,7 +86,7 @@ class ChatterboxResponseParser:
         Parse a podcast script file and extract the JSON structure.
         
         Args:
-            file_path: Path to the podcast script file
+            file_path: Path to the verified_unified_script.json file (two-pass quality control required)
             
         Returns:
             Parsed JSON data as dictionary
@@ -361,3 +361,32 @@ class ChatterboxResponseParser:
             EpisodeInfo object with metadata
         """
         return self._extract_episode_metadata(data)
+
+    def parse_episode_script(self, episode_dir: Union[str, Path]) -> Dict:
+        """
+        Parse episode script - requires verified script from two-pass quality control.
+        
+        Args:
+            episode_dir: Path to episode directory
+            
+        Returns:
+            Parsed JSON data as dictionary
+            
+        Raises:
+            FileNotFoundError: If verified script doesn't exist
+            ValueError: If JSON cannot be parsed
+        """
+        episode_dir = Path(episode_dir)
+        scripts_dir = episode_dir / "Output" / "Scripts"
+        
+        # Only use verified scripts - two-pass quality control is mandatory
+        verified_script = scripts_dir / "verified_unified_script.json"
+        
+        if not verified_script.exists():
+            raise FileNotFoundError(
+                f"Verified script file not found: {verified_script}. "
+                f"Run the complete two-pass pipeline to generate verified scripts."
+            )
+        
+        self.logger.info("Using verified unified script (two-pass quality control)")
+        return self.parse_response_file(verified_script)

@@ -7,7 +7,7 @@ strategy defined in the project plan.
 """
 
 import re
-from .config_manager import get_setting, get_uploader_rule
+from .config_manager import get_setting, get_uploader_rule, get_host_mapping
 
 class NameExtractor:
     def __init__(self, title, uploader):
@@ -24,8 +24,9 @@ class NameExtractor:
         Returns:
             dict: A dictionary containing the 'host', 'guest', and 'rule_used'.
         """
-        # Uploader-as-host principle: Always use uploader as canonical host
-        self.host = self.uploader
+        # Check for host mapping first, then use uploader as fallback
+        mapped_host = get_host_mapping(self.uploader)
+        self.host = mapped_host if mapped_host else self.uploader
         
         cleaned_title = self._sanitize_title(self.original_title)
         rule_used = "none"

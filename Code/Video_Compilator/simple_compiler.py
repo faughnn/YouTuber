@@ -181,7 +181,7 @@ class SimpleCompiler:
         """Parse unified podcast script and identify segments
         
         Args:
-            script_path: Path to unified_podcast_script.json
+            script_path: Path to verified_unified_script.json (two-pass quality control required)
             
         Returns:
             List of SegmentInfo objects in sequence order
@@ -475,7 +475,11 @@ class SimpleCompiler:
             self.logger.info(f"Starting compilation for episode: {episode_path.name}")
             
             # Step 1: Parse script and identify segments
-            script_path = episode_path / "Output" / "Scripts" / "unified_podcast_script.json"
+            # Only use verified scripts - two-pass quality control is mandatory
+            script_path = episode_path / "Output" / "Scripts" / "verified_unified_script.json"
+            
+            if not script_path.exists():
+                raise FileNotFoundError(f"Verified script file not found: {script_path}. Run the complete two-pass pipeline to generate verified scripts.")
             
             try:
                 segments = self.parse_script(script_path)

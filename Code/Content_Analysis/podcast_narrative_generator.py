@@ -45,7 +45,7 @@ class NarrativeCreatorGenerator:
     
     def __init__(self, config_path: Optional[str] = None):
         """Initialize the narrative generator with API configuration."""
-        self.api_key = "AIzaSyCsti0qnCEKOgzAnG_w41IfMNMxkyl3ysw"  # From transcript_analyzer.py
+        self.api_key = os.getenv('GEMINI_API_KEY')  # From environment variable
         self.model_name = "gemini-2.5-pro-preview-06-05"  # Fixed model name
         # Initialize Gemini API
         self._configure_gemini()
@@ -459,9 +459,11 @@ class NarrativeCreatorGenerator:
                 logger.info(f"Attempt {attempt + 1}/{max_retries}")
                 
                 # Step 1: Upload analysis file to Gemini
+                logger.info("📤 Uploading analysis results to Gemini for narrative generation...")
                 uploaded_file = self._upload_analysis_file(analysis_json_path, episode_title)
                 if not uploaded_file:
                     raise Exception("File upload failed")
+                logger.info("✅ File upload completed")
                 
                 # Determine which prompt file to use based on narrative_format
                 if narrative_format == "with_hook":
@@ -481,9 +483,12 @@ class NarrativeCreatorGenerator:
                 
                 # Step 3: Create model and generate response
                 model = self._create_model()
-                logger.info("Sending request to Gemini with uploaded file")
+                logger.info("🤖 Sending narrative generation request to Gemini AI...")
+                logger.info("⏳ This may take 1-3 minutes depending on content complexity...")
                 
                 response = model.generate_content([prompt_text, uploaded_file])
+                
+                logger.info("✅ Received response from Gemini AI")
                 
                 # Step 4: Check response validity
                 if not response:

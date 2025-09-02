@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://youtuberpipeline.com/schemas/verified_unified_script_schema.json",
+  "title": "Verified Unified Script Schema",
+  "description": "Schema for verified unified podcast script with verification metadata",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "unified_podcast_script_schema.json"
+    },
+    {
+      "type": "object",
+      "required": [
+        "verification_results"
+      ],
+      "properties": {
+        "verification_results": {
+          "type": "object",
+          "required": [
+            "verification_timestamp",
+            "verification_agent_id",
+            "rebuttals_assessed",
+            "rebuttals_rewritten", 
+            "accuracy_improvements",
+            "completeness_improvements",
+            "effectiveness_improvements",
+            "final_verification_score"
+          ],
+          "properties": {
+            "verification_timestamp": {
+              "type": "string",
+              "format": "date-time",
+              "description": "ISO 8601 timestamp of when verification was completed"
+            },
+            "verification_agent_id": {
+              "type": "string",
+              "description": "ID of the verification agent that processed this script"
+            },
+            "rebuttals_assessed": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "segment_id",
+                  "original_rebuttal",
+                  "assessment_score",
+                  "assessment_reasoning"
+                ],
+                "properties": {
+                  "segment_id": {
+                    "type": "string",
+                    "pattern": "^Harmful_Segment_\\d{2}$",
+                    "description": "Reference to the harmful segment"
+                  },
+                  "original_rebuttal": {
+                    "type": "string",
+                    "description": "Original rebuttal content"
+                  },
+                  "assessment_score": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 10,
+                    "description": "Quality score of the original rebuttal (1-10)"
+                  },
+                  "assessment_reasoning": {
+                    "type": "string",
+                    "description": "Reasoning behind the assessment score"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "description": "List of rebuttals that were assessed"
+            },
+            "rebuttals_rewritten": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "segment_id",
+                  "original_rebuttal", 
+                  "improved_rebuttal",
+                  "improvement_reasoning",
+                  "improvement_score"
+                ],
+                "properties": {
+                  "segment_id": {
+                    "type": "string",
+                    "pattern": "^Harmful_Segment_\\d{2}$",
+                    "description": "Reference to the harmful segment"
+                  },
+                  "original_rebuttal": {
+                    "type": "string",
+                    "description": "Original rebuttal that was rewritten"
+                  },
+                  "improved_rebuttal": {
+                    "type": "string",
+                    "description": "Improved version of the rebuttal"
+                  },
+                  "improvement_reasoning": {
+                    "type": "string",
+                    "description": "Explanation of what was improved and why"
+                  },
+                  "improvement_score": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 10,
+                    "description": "Quality score of the improved rebuttal (1-10)"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "description": "List of rebuttals that were rewritten for improvement"
+            },
+            "accuracy_improvements": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "section_id",
+                  "improvement_type",
+                  "original_content",
+                  "improved_content",
+                  "improvement_reasoning"
+                ],
+                "properties": {
+                  "section_id": {
+                    "type": "string",
+                    "description": "ID of the section that was improved"
+                  },
+                  "improvement_type": {
+                    "type": "string",
+                    "enum": [
+                      "factual_correction",
+                      "citation_added",
+                      "context_clarification",
+                      "bias_reduction"
+                    ],
+                    "description": "Type of accuracy improvement made"
+                  },
+                  "original_content": {
+                    "type": "string",
+                    "description": "Original content before improvement"
+                  },
+                  "improved_content": {
+                    "type": "string", 
+                    "description": "Improved content after correction"
+                  },
+                  "improvement_reasoning": {
+                    "type": "string",
+                    "description": "Explanation of the accuracy improvement"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "description": "List of accuracy improvements made to the script"
+            },
+            "completeness_improvements": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "section_id",
+                  "improvement_type",
+                  "added_content",
+                  "improvement_reasoning"
+                ],
+                "properties": {
+                  "section_id": {
+                    "type": "string",
+                    "description": "ID of the section where content was added"
+                  },
+                  "improvement_type": {
+                    "type": "string",
+                    "enum": [
+                      "missing_context_added",
+                      "additional_evidence_provided",
+                      "counterargument_included",
+                      "nuance_clarification"
+                    ],
+                    "description": "Type of completeness improvement made"
+                  },
+                  "added_content": {
+                    "type": "string",
+                    "description": "Content that was added for completeness"
+                  },
+                  "improvement_reasoning": {
+                    "type": "string",
+                    "description": "Explanation of why this content was added"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "description": "List of completeness improvements made to the script"
+            },
+            "effectiveness_improvements": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "section_id",
+                  "improvement_type",
+                  "original_content",
+                  "improved_content", 
+                  "improvement_reasoning"
+                ],
+                "properties": {
+                  "section_id": {
+                    "type": "string",
+                    "description": "ID of the section that was improved"
+                  },
+                  "improvement_type": {
+                    "type": "string",
+                    "enum": [
+                      "clarity_enhancement",
+                      "persuasiveness_improvement",
+                      "audience_engagement",
+                      "logical_flow_improvement"
+                    ],
+                    "description": "Type of effectiveness improvement made"
+                  },
+                  "original_content": {
+                    "type": "string",
+                    "description": "Original content before improvement"
+                  },
+                  "improved_content": {
+                    "type": "string",
+                    "description": "Improved content for better effectiveness"
+                  },
+                  "improvement_reasoning": {
+                    "type": "string",
+                    "description": "Explanation of how this improves effectiveness"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "description": "List of effectiveness improvements made to the script"
+            },
+            "final_verification_score": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 10,
+              "description": "Overall quality score after verification process (1-10)"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

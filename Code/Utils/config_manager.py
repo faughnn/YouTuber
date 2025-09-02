@@ -9,9 +9,19 @@ This module loads and provides the settings from the
 import json
 import os
 
+# Handle imports for both module and direct execution
+try:
+    from .project_paths import get_config_file
+except ImportError:
+    # For direct execution, add current directory to path
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from project_paths import get_config_file
+
 # Store the config globally after loading it once to avoid repeated file I/O.
 _config = None
-_config_path = os.path.abspath('Code/Config/name_extractor_rules.json')
+# Get config path using centralized path discovery
+_config_path = str(get_config_file('name_extractor_rules.json'))
 
 def get_config():
     """
@@ -47,6 +57,28 @@ def get_uploader_rule(uploader_name):
     """
     config = get_config()
     return config.get("uploader_rules", {}).get(uploader_name)
+
+def get_host_mapping(uploader_name):
+    """
+    Gets the friendly host name mapping for a specific uploader.
+    
+    Args:
+        uploader_name: The uploader/channel name
+        
+    Returns:
+        str: Mapped host name, or None if no mapping exists
+    """
+    config = get_config()
+    return config.get("host_mappings", {}).get(uploader_name)
+
+def reload_config():
+    """
+    Forces a reload of the configuration from disk.
+    Useful when the config file has been modified.
+    """
+    global _config
+    _config = None
+    return get_config()
 
 # Example usage for testing when this file is run directly
 if __name__ == '__main__':

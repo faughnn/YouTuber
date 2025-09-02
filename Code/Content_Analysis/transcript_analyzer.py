@@ -19,17 +19,17 @@ import re
 import time
 from functools import wraps
 
-# Add path for file organizer
-current_dir = os.path.dirname(os.path.abspath(__file__))
-utils_dir = os.path.join(current_dir, '..', 'Utils')
-sys.path.append(utils_dir)
+# Add path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'Utils'))
 
 try:
     from file_organizer import FileOrganizer
+    from project_paths import get_file_organizer_config
 except ImportError as e:
-    print(f"Warning: Could not import FileOrganizer: {e}")
+    print(f"Warning: Could not import required modules: {e}")
     print("Falling back to original output behavior")
     FileOrganizer = None
+    get_file_organizer_config = None
 
 # Set up console logging
 logging.basicConfig(
@@ -42,7 +42,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-API_KEY = "AIzaSyCsti0qnCEKOgzAnG_w41IfMNMxkyl3ysw"
+API_KEY = os.getenv('GEMINI_API_KEY')
 
 def load_episode_metadata_from_path(transcript_path):
     """
@@ -220,15 +220,16 @@ def retry_gemini_call(max_retries=5, base_delay=1, backoff_factor=2):
 def create_file_organizer():
     """Create and configure the FileOrganizer."""
     try:
-        # Define base paths for the YouTuber project
-        base_paths = {
-            'episode_base': os.path.join(os.path.dirname(__file__), '..', '..', 'Content'),
-            'analysis_rules': os.path.join(os.path.dirname(__file__), 'Rules')
-        }
-        
-        # Convert to absolute paths
-        for key, path in base_paths.items():
-            base_paths[key] = os.path.abspath(path)
+        if get_file_organizer_config is None:
+            # Fallback to hardcoded paths if project_paths not available
+            base_paths = {
+                'episode_base': os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'Content')),
+                'analysis_rules': os.path.join(os.path.dirname(__file__), 'Rules')
+            }
+        else:
+            # Use centralized path discovery
+            base_paths = get_file_organizer_config()
+            base_paths['analysis_rules'] = os.path.join(os.path.dirname(__file__), 'Rules')
         
         return FileOrganizer(base_paths)
     except Exception as e:

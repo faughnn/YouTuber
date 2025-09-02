@@ -89,7 +89,7 @@ class TestMasterProcessorStage5Integration(unittest.TestCase):
             ]
         }
         
-        self.script_file_path = os.path.join(self.scripts_dir, "unified_podcast_script.json")
+        self.script_file_path = os.path.join(self.scripts_dir, "verified_unified_script.json")
         with open(self.script_file_path, 'w', encoding='utf-8') as f:
             json.dump(self.test_script_data, f, indent=2)
     

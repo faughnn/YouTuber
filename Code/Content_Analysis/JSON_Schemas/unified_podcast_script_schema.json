@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://youtuberpipeline.com/schemas/unified_podcast_script_schema.json",
+  "title": "Unified Podcast Script Schema",
+  "description": "Schema for the unified podcast script output with narrative sections and video clips",
+  "type": "object",
+  "required": [
+    "narrative_theme",
+    "podcast_sections", 
+    "script_metadata"
+  ],
+  "properties": {
+    "narrative_theme": {
+      "type": "string",
+      "description": "Overall thematic narrative for the podcast episode"
+    },
+    "podcast_sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "section_type",
+          "section_id",
+          "estimated_duration"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "section_type": {
+                  "enum": ["intro", "pre_clip", "post_clip", "outro"]
+                }
+              }
+            },
+            "then": {
+              "required": ["script_content"]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "section_type": {
+                  "const": "video_clip"
+                }
+              }
+            },
+            "then": {
+              "required": ["clip_id", "start_time", "end_time", "title", "selection_reason", "severity_level"]
+            }
+          }
+        ],
+        "properties": {
+          "section_type": {
+            "type": "string",
+            "enum": [
+              "intro",
+              "pre_clip", 
+              "video_clip",
+              "post_clip",
+              "outro"
+            ],
+            "description": "Type of section in the podcast"
+          },
+          "section_id": {
+            "type": "string",
+            "description": "Unique identifier for the section"
+          },
+          "clip_reference": {
+            "type": "string",
+            "pattern": "^Harmful_Segment_\\d{2}$",
+            "description": "Reference to the harmful segment ID (for pre_clip and post_clip sections)"
+          },
+          "script_content": {
+            "type": "string",
+            "description": "The script content for this section"
+          },
+          "estimated_duration": {
+            "type": "string",
+            "description": "Estimated duration in any reasonable format"
+          },
+          "clip_id": {
+            "type": "string",
+            "pattern": "^Harmful_Segment_\\d{2}$",
+            "description": "ID of the harmful segment (for video_clip sections)"
+          },
+          "start_time": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$",
+            "description": "Start timestamp as string for video clips"
+          },
+          "end_time": {
+            "type": "string", 
+            "pattern": "^\\d+\\.\\d+$",
+            "description": "End timestamp as string for video clips"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the video clip segment"
+          },
+          "selection_reason": {
+            "type": "string",
+            "description": "Reason why this clip was selected"
+          },
+          "severity_level": {
+            "type": "string",
+            "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+            "description": "Severity level of the harmful content"
+          },
+          "key_claims": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Key claims made in the clip"
+          },
+          "suggestedClip": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["timestamp", "speaker", "quote"],
+              "properties": {
+                "timestamp": {
+                  "type": "string",
+                  "pattern": "^\\[\\d+:\\d+\\]$",
+                  "description": "Formatted timestamp [MM:SS]"
+                },
+                "speaker": {
+                  "type": "string",
+                  "description": "Speaker name or identifier"
+                },
+                "quote": {
+                  "type": "string",
+                  "description": "Exact quote from the speaker"
+                }
+              },
+              "additionalProperties": false
+            },
+            "description": "Timestamped quotes for video clip sections"
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Array of podcast sections in order"
+    },
+    "script_metadata": {
+      "type": "object",
+      "required": [
+        "total_estimated_duration",
+        "target_audience",
+        "key_themes", 
+        "total_clips_analyzed",
+        "tts_segments_count",
+        "timeline_ready"
+      ],
+      "properties": {
+        "total_estimated_duration": {
+          "type": "string",
+          "description": "Total estimated duration of the podcast"
+        },
+        "target_audience": {
+          "type": "string",
+          "description": "Description of the target audience"
+        },
+        "key_themes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Key themes covered in the podcast"
+        },
+        "total_clips_analyzed": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "description": "Total number of clips analyzed as string"
+        },
+        "tts_segments_count": {
+          "type": "string", 
+          "pattern": "^\\d+$",
+          "description": "Total number of TTS segments as string"
+        },
+        "timeline_ready": {
+          "type": "boolean",
+          "description": "Whether the timeline is ready for processing"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,52 @@
+# Rebuttal Verification Prompt
+# Generated: 2025-01-13 14:30:00
+# Two-Pass AI Quality Control System - Phase 2
+
+## REBUTTAL VERIFICATION ASSESSMENT - FACT-CHECKING EVALUATION
+
+**EVALUATION METHOD:** Evaluate the post_clip rebuttal content in each section based on factual correctness, argument completeness, and persuasiveness. Score each dimension independently on 1-10 scale.
+
+**FOCUS:** Examine the script_content field in each post_clip section, which contains rebuttal content designed to counter harmful claims from the preceding video clip.
+
+### SCORING DIMENSIONS (1-10 scale):
+
+**1. Rebuttal Accuracy (1-10):**
+- 9-10: Completely accurate with verifiable facts and proper citations
+- 7-8: Mostly accurate with minor factual issues or missing sources
+- 5-6: Some factual inaccuracies or unsupported claims present
+- 1-4: Significant factual errors or misleading counter-arguments
+
+**2. Rebuttal Completeness (1-10):**
+- 9-10: Comprehensive coverage of all key counter-arguments needed
+- 7-8: Good coverage with minor gaps in addressing harmful claims
+- 5-6: Adequate but missing some important counter-points
+- 1-4: Insufficient counter-argument coverage, major gaps present
+
+**3. Rebuttal Effectiveness (1-10):**
+- 9-10: Compelling, well-sourced rebuttals that effectively counter harmful claims
+- 7-8: Strong rebuttals with good evidence and persuasive presentation
+- 5-6: Moderate effectiveness with some persuasive elements
+- 1-4: Weak or ineffective counter-arguments, poor presentation
+
+### VERIFICATION TRIGGERS:
+- Accuracy < 7: Rebuttal needs factual improvement
+- Completeness < 6: Rebuttal needs additional counter-arguments
+- Effectiveness < 6: Rebuttal needs persuasiveness improvement
+
+### IMPROVEMENT AREAS:
+- **Accuracy:** Add credible sources, fix factual errors, include proper citations
+- **Completeness:** Address missing counter-arguments, cover all key points
+- **Effectiveness:** Improve persuasiveness, clarity, and logical flow
+
+This prompt is designed for comprehensive fact-checking and quality improvement of rebuttal content to ensure effective counter-arguments against harmful misinformation.
+
+## REWRITING APPROACH:
+
+When rebuttals fail verification thresholds, they are rewritten using the Alternative Media Literacy voice:
+- **Jon Stewart-inspired tone**: Humorous, sarcastic, sharp cynical edge
+- **TTS-optimized delivery**: Natural speech patterns, strategic pauses, emphasis
+- **Entertaining fact-checking**: Transform dry rebuttals into compelling, witty counter-arguments
+- **Conversational engagement**: Direct audience address with rhetorical questions
+- **Balance entertainment with education**: Make fact-checking compelling while maintaining accuracy
+
+The goal is to transform generic educational rebuttals into the sharp, entertaining fact-checks that match the show's personality and work effectively when read by TTS systems.

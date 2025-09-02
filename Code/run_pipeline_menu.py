@@ -1,8 +1,16 @@
 import sys
 import os
+
+# Fix Windows console encoding for Unicode/emoji support
+if sys.platform == "win32":
+    import codecs
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
 from master_processor_v2 import MasterProcessorV2
 from Utils.logger_factory import get_menu_logger
 from Utils.enhanced_pipeline_logger import LogLevel
+from Utils.project_paths import get_content_dir
 
 # Enhanced menu system using Rich formatting
 menu_logger = get_menu_logger()
@@ -43,10 +51,10 @@ def get_narrative_format_choice():
             menu_logger.show_info("Pipeline cancelled.")
             return None
         elif format_choice == "1":
-            narrative_format = "with_hook"
+            narrative_format = "without_hook"
             break
         elif format_choice == "2":
-            narrative_format = "without_hook"
+            narrative_format = "with_hook"
             break
         else:
             menu_logger.show_invalid_choice(format_choice, 2)
@@ -341,7 +349,7 @@ def run_pipeline_one_stage(processor, content_dir):
 def main():
     youtube_url = None
     processor = None
-    content_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Content')
+    content_dir = str(get_content_dir())
     
     while True:
         print_main_menu(youtube_url)
