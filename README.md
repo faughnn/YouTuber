@@ -74,7 +74,7 @@ Combines extracted clips, generated audio commentary, and transitions into a pol
    # Required for AI analysis
    export GEMINI_API_KEY="your_gemini_api_key"
    
-   # Optional for better TTS diarization
+   # Required for TTS diarization
    export HuggingFaceToken="your_hf_token"
    
    # Optional for premium TTS
