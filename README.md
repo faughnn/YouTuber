@@ -2,6 +2,8 @@
 
 A complete YouTube video processing system that transforms YouTube content into polished podcast-style compilations with AI-powered analysis and quality control.
 
+Example of it's output: https://www.youtube.com/watch?v=7P-Sl1w_AvU
+
 ## 🎬 What It Does
 
 Takes a YouTube URL and produces a professional podcast video through a 7-stage pipeline:
