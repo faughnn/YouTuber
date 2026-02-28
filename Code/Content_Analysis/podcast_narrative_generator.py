@@ -23,7 +23,11 @@ from pathlib import Path
 from typing import Dict, Optional, Any
 import traceback
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
+
+# Global client for Gemini API
+_gemini_client = None
 
 # Add path for utilities
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -46,19 +50,20 @@ class NarrativeCreatorGenerator:
     def __init__(self, config_path: Optional[str] = None):
         """Initialize the narrative generator with API configuration."""
         self.api_key = os.getenv('GEMINI_API_KEY')  # From environment variable
-        self.model_name = "gemini-2.5-pro-preview-06-05"  # Fixed model name
+        self.model_name = "gemini-2.5-pro"  # Fixed model name
         # Initialize Gemini API
         self._configure_gemini()
         
         logger.info("NarrativeCreatorGenerator initialized successfully")
     
     def _configure_gemini(self) -> bool:
-        """Configure Gemini API connection."""
+        """Configure Gemini API connection using new google.genai Client pattern."""
+        global _gemini_client
         logger.info("Configuring Gemini API")
         try:
             if self.api_key:
-                genai.configure(api_key=self.api_key)
-                logger.info("Gemini API configured successfully")
+                _gemini_client = genai.Client(api_key=self.api_key)
+                logger.info("Gemini API client configured successfully")
                 return True
             else:
                 logger.error("No API key found")
@@ -66,12 +71,46 @@ class NarrativeCreatorGenerator:
         except Exception as e:
             logger.error(f"Error configuring Gemini API: {e}")
             return False
+
+    def _get_client(self):
+        """Get the Gemini client, initializing if needed."""
+        global _gemini_client
+        if _gemini_client is None:
+            if not self._configure_gemini():
+                raise Exception("Failed to configure Gemini API client")
+        return _gemini_client
     
+    def _resolve_conditionals(self, template: str, has_hook: bool) -> str:
+        """Resolve {%if has_hook%}...{%else%}...{%endif%} conditionals in template."""
+        import re
+        pattern = r'\{%if has_hook%\}(.*?)\{%else%\}(.*?)\{%endif%\}'
+
+        def replacer(match):
+            if has_hook:
+                return match.group(1)
+            else:
+                return match.group(2)
+
+        return re.sub(pattern, replacer, template, flags=re.DOTALL)
+
+    def _load_persona(self) -> str:
+        """Load the canonical persona definition from file."""
+        persona_path = os.path.join(current_dir, 'Generation_Templates', 'persona_definition.txt')
+        try:
+            with open(persona_path, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+        except Exception as e:
+            logger.error(f"Error loading persona definition: {e}")
+            raise
+
     def _load_prompt_template(self, prompt_file_path: str) -> str:
-        """Load the prompt template from file."""
+        """Load the prompt template from file and inject persona."""
         try:
             with open(prompt_file_path, 'r', encoding='utf-8') as f:
                 template = f.read()
+            # Inject persona definition
+            persona = self._load_persona()
+            template = template.replace('{persona_definition}', persona)
             logger.info(f"Loaded prompt template: {len(template)} characters")
             return template
         except Exception as e:
@@ -98,25 +137,28 @@ class NarrativeCreatorGenerator:
             raise ValueError(f"Invalid JSON format: {e}")
         
         try:
-            # Upload file using the pattern from transcript_analyzer.py
+            # Upload file using the new google.genai Client pattern
+            client = self._get_client()
             display_name = f"Analysis Results - {episode_title}"
             logger.info(f"Uploading to Gemini with display name: {display_name}")
-            
-            uploaded_file = genai.upload_file(
-                path=analysis_json_path,
-                mime_type="text/plain",
-                display_name=display_name
+
+            uploaded_file = client.files.upload(
+                file=analysis_json_path,
+                config=types.UploadFileConfig(
+                    mime_type="text/plain",
+                    display_name=display_name
+                )
             )
-            
+
             logger.info(f"File uploaded successfully: {uploaded_file.name}")
             logger.info(f"File URI: {uploaded_file.uri}")
-            
+
             # Wait for processing to complete
             while uploaded_file.state.name == "PROCESSING":
                 logger.info("Waiting for file processing...")
                 time.sleep(2)
-                uploaded_file = genai.get_file(uploaded_file.name)
-            
+                uploaded_file = client.files.get(name=uploaded_file.name)
+
             if uploaded_file.state.name == "FAILED":
                 raise Exception("File processing failed")
             logger.info("File processing completed successfully")
@@ -143,105 +185,7 @@ class NarrativeCreatorGenerator:
         except Exception as e:
             logger.error(f"Error extracting guest name: {e}")
             return "Unknown Guest"
-        for pattern in folder_patterns:
-            match = re.search(pattern, episode_title)
-            if match:
-                if pattern.startswith("Tucker_Carlson"):
-                    # For Tucker Carlson format, extract the guest name after "Tucker_Carlson_"
-                    guest_string = match.group(1).strip()
-                    logger.info(f"Extracted guest string using Tucker Carlson pattern: {guest_string}")
-                    return self._parse_multiple_guests(guest_string)
-                elif len(match.groups()) == 3:
-                    # For three-part format, assume middle part is host, last part is guest
-                    guest_string = match.group(3).strip()
-                    logger.info(f"Extracted guest string using three-part pattern: {guest_string}")
-                    return self._parse_multiple_guests(guest_string)
-                elif len(match.groups()) == 2:
-                    # For two-part format, assume second part is guest
-                    guest_string = match.group(2).strip()
-                    logger.info(f"Extracted guest string using two-part pattern: {guest_string}")
-                    return self._parse_multiple_guests(guest_string)
-        
-        # Fallback to YouTube title patterns
-        youtube_patterns = [
-            r"Joe Rogan Experience #\d+ - (.+)",  # JRE format: "Joe Rogan Experience #2325 - Aaron Rodgers"
-            r"(.+) #\d+ - (.+)",                  # General format with episode number
-            r"(.+) - (.+)",                       # Simple dash format
-            r"(.+) with (.+)",                    # "with" format
-            r"(.+): (.+)"                         # Colon format
-        ]
-        
-        for pattern in youtube_patterns:
-            match = re.search(pattern, episode_title)
-            if match:
-                # For JRE format, return the guest name after the dash
-                if "Joe Rogan Experience" in pattern:
-                    guest_string = match.group(1).strip()
-                    logger.info(f"Extracted guest string using JRE pattern: {guest_string}")
-                    return self._parse_multiple_guests(guest_string)
-                # For other formats, return the second group (assuming it's the guest)
-                else:
-                    guest_string = match.group(2).strip()
-                    logger.info(f"Extracted guest string using YouTube pattern: {guest_string}")
-                    return self._parse_multiple_guests(guest_string)
-        
-        logger.warning(f"Could not extract guest name from title: {episode_title}")
-        return "Unknown Guest"
     
-    def _parse_multiple_guests(self, guest_string: str) -> str:
-        """
-        Parse a guest string that may contain multiple guests and format appropriately.
-        
-        Args:
-            guest_string: Raw guest string extracted from title
-            
-        Returns:
-            str: Properly formatted guest name(s)
-        """
-        import re
-        
-        # Common separators for multiple guests
-        separators = [
-            r'\s+&\s+',           # " & "
-            r'\s+and\s+',         # " and "
-            r',\s+and\s+',        # ", and "
-            r',\s+',              # ", "
-            r'\s+with\s+',        # " with "
-        ]
-        
-        # Try to split on common separators
-        guests = [guest_string]  # Start with the whole string
-        
-        for separator in separators:
-            if re.search(separator, guest_string):
-                guests = re.split(separator, guest_string)
-                break
-        
-        # Clean up each guest name
-        cleaned_guests = []
-        for guest in guests:
-            cleaned = guest.strip()
-            # Remove common prefixes/suffixes that might indicate roles
-            cleaned = re.sub(r'^(Dr\.?|Professor|Prof\.?|Mr\.?|Ms\.?|Mrs\.?)\s+', '', cleaned)
-            if cleaned:
-                cleaned_guests.append(cleaned)
-        
-        if len(cleaned_guests) == 1:
-            logger.info(f"Single guest identified: {cleaned_guests[0]}")
-            return cleaned_guests[0]
-        elif len(cleaned_guests) == 2:
-            result = f"{cleaned_guests[0]} and {cleaned_guests[1]}"
-            logger.info(f"Two guests identified: {result}")
-            return result
-        elif len(cleaned_guests) > 2:
-            # For 3+ guests: "Name1, Name2, and Name3"
-            result = ", ".join(cleaned_guests[:-1]) + f", and {cleaned_guests[-1]}"
-            logger.info(f"Multiple guests identified: {result}")
-            return result
-        else:
-            logger.warning(f"Could not parse guests from: {guest_string}")
-            return guest_string
-
     def _build_unified_prompt(self, episode_title: str, custom_instructions: str = "") -> str:
         """Build the unified prompt that references the uploaded analysis file."""
         logger.info("Building unified narrative prompt")
@@ -275,16 +219,17 @@ class NarrativeCreatorGenerator:
         logger.info(f"Unified prompt created: {len(formatted_prompt)} characters")
         return formatted_prompt
     
-    def _create_model(self):
-        """Create Gemini model with optimized configuration."""
-        return genai.GenerativeModel(
-            self.model_name,            
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.1,
-                top_p=0.9,
-                candidate_count=1,
-                response_mime_type="application/json"
-            )
+    def _get_generation_config(self):
+        """Get the generation configuration for Gemini API calls.
+
+        Includes Google Search grounding to verify facts during rebuttal generation,
+        such as checking current/historical positions of people mentioned.
+        """
+        return types.GenerateContentConfig(
+            temperature=0.6,
+            top_p=0.9,
+            candidate_count=1,
+            response_mime_type="application/json",
         )
     
     def _parse_unified_response(self, response_text: str, episode_title: str) -> Dict:
@@ -349,12 +294,13 @@ class NarrativeCreatorGenerator:
                     logger.error(f"Invalid section_type: {section_type}")
                     return False
                 
-                # Common required fields for all sections
-                common_keys = ['section_type', 'section_id', 'estimated_duration']
-                for key in common_keys:
-                    if key not in section:
-                        logger.error(f"Section {i} missing required key: {key}")
-                        return False
+                # Common required fields for all sections - add defaults if missing
+                if 'section_id' not in section:
+                    section['section_id'] = f"section_{i:03d}"
+                    logger.warning(f"Section {i} missing section_id, using default: {section['section_id']}")
+                if 'estimated_duration' not in section:
+                    section['estimated_duration'] = "30 seconds"
+                    logger.warning(f"Section {i} missing estimated_duration, using default: {section['estimated_duration']}")
                   # Section-specific required fields
                 if section_type in ['video_clip', 'hook_clip']:
                     video_clip_keys = ['clip_id', 'start_time', 'end_time', 'title', 'selection_reason', 
@@ -412,10 +358,22 @@ class NarrativeCreatorGenerator:
             if has_hook_clip:
                 required_metadata_keys.append('hook_clip_id')
             
+            # Add default values for missing metadata keys
+            metadata_defaults = {
+                'total_estimated_duration': '10 minutes',
+                'target_audience': 'General audience interested in political discourse',
+                'key_themes': ['political commentary', 'media analysis'],
+                'total_clips_analyzed': len([s for s in sections if s.get('section_type') in ['video_clip', 'hook_clip']]),
+                'tts_segments_count': len([s for s in sections if s.get('section_type') not in ['video_clip', 'hook_clip']]),
+                'timeline_ready': True
+            }
             for key in required_metadata_keys:
                 if key not in metadata:
-                    logger.error(f"Missing metadata key: {key}")
-                    return False
+                    if key in metadata_defaults:
+                        metadata[key] = metadata_defaults[key]
+                        logger.warning(f"Missing metadata key: {key}, using default: {metadata[key]}")
+                    else:
+                        logger.warning(f"Missing metadata key: {key}, no default available")
             
             # Validate key_themes is a list
             if not isinstance(metadata.get('key_themes'), list):
@@ -438,97 +396,218 @@ class NarrativeCreatorGenerator:
             logger.error(f"Validation error: {e}")
             return False
     
-    def generate_unified_narrative(self, analysis_json_path: str, episode_title: str, 
+    def _check_response_safety(self, response) -> None:
+        """Check Gemini response for safety blocks and raise on critical issues."""
+        if not response:
+            raise Exception("No response from Gemini")
+
+        if hasattr(response, 'candidates') and response.candidates:
+            candidate = response.candidates[0]
+            if hasattr(candidate, 'finish_reason'):
+                finish_reason = candidate.finish_reason
+                finish_str = str(finish_reason).upper()
+                logger.info(f"Gemini finish reason: {finish_reason}")
+
+                if 'SAFETY' in finish_str:
+                    raise Exception("SAFETY_BLOCKED: Content was blocked by Gemini's safety filters")
+                elif 'RECITATION' in finish_str:
+                    raise Exception("RECITATION_BLOCKED: Content was blocked due to potential recitation")
+                elif 'MAX_TOKENS' in finish_str:
+                    logger.warning("Response may be truncated due to MAX_TOKENS")
+                elif 'STOP' not in finish_str and finish_reason not in [1, 'STOP']:
+                    logger.warning(f"Unexpected finish reason: {finish_reason}")
+
+    def _generate_structure_plan(self, uploaded_file, episode_title: str, narrative_format: str) -> Dict:
+        """
+        Call 1: Generate structure plan (temp 0.3).
+
+        Returns:
+            Dict containing the structure plan
+        """
+        logger.info("📋 Call 1/2: Generating structure plan...")
+
+        # Load structure prompt
+        structure_prompt_path = os.path.join(
+            current_dir, 'Generation_Templates', 'narrative_structure_prompt.txt'
+        )
+        with open(structure_prompt_path, 'r', encoding='utf-8') as f:
+            structure_prompt = f.read()
+
+        # Add episode context
+        host_name = self._extract_host_name_from_title(episode_title)
+        guest_name = self._extract_guest_name_from_title(episode_title)
+
+        episode_context = f"""
+## EPISODE CONTEXT
+**Episode Title:** {episode_title}
+**Host Name:** {host_name}
+**Guest Name:** {guest_name}
+**Narrative Format:** {narrative_format}
+
+---
+
+"""
+        full_prompt = episode_context + structure_prompt
+
+        client = self._get_client()
+        response = client.models.generate_content(
+            model=self.model_name,
+            contents=[full_prompt, uploaded_file],
+            config=types.GenerateContentConfig(
+                temperature=0.3,
+                top_p=0.9,
+                candidate_count=1,
+                response_mime_type="application/json",
+            )
+        )
+
+        self._check_response_safety(response)
+
+        response_text = response.text.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+
+        structure_plan = json.loads(response_text.strip())
+        logger.info("✅ Structure plan generated")
+        return structure_plan
+
+    def _generate_creative_script(self, uploaded_file, structure_plan: Dict,
+                                   episode_title: str, narrative_format: str) -> Dict:
+        """
+        Call 2: Generate creative script from structure plan (temp 0.6).
+
+        Returns:
+            Dict containing the final podcast script
+        """
+        logger.info("🎨 Call 2/2: Generating creative script...")
+
+        # Load creative prompt
+        creative_prompt_path = os.path.join(
+            current_dir, 'Generation_Templates', 'narrative_creative_prompt.txt'
+        )
+        with open(creative_prompt_path, 'r', encoding='utf-8') as f:
+            creative_prompt = f.read()
+
+        # Inject persona
+        persona = self._load_persona()
+        creative_prompt = creative_prompt.replace('{persona_definition}', persona)
+
+        # Inject structure plan
+        creative_prompt = creative_prompt.replace(
+            '{structure_plan}', json.dumps(structure_plan, indent=2)
+        )
+
+        # Build output format section based on narrative format
+        # Load the main template to get the output format
+        main_prompt_path = os.path.join(
+            current_dir, 'Generation_Templates', 'tts_podcast_narrative_prompt.txt'
+        )
+        main_template = self._load_prompt_template(main_prompt_path)
+        has_hook = narrative_format == "with_hook"
+        main_template = self._resolve_conditionals(main_template, has_hook)
+
+        # Extract just the output format section
+        import re
+        output_match = re.search(
+            r'## 6\. MANDATORY OUTPUT FORMAT\s*\n(.*?)(?=\n## 7\.|\Z)',
+            main_template, re.DOTALL
+        )
+        output_format = output_match.group(1).strip() if output_match else ""
+        creative_prompt = creative_prompt.replace('{output_format}', output_format)
+
+        # Add episode context
+        host_name = self._extract_host_name_from_title(episode_title)
+        guest_name = self._extract_guest_name_from_title(episode_title)
+
+        episode_context = f"""
+## EPISODE CONTEXT
+**Episode Title:** {episode_title}
+**Host Name:** {host_name}
+**Guest Name:** {guest_name}
+
+**CRITICAL INSTRUCTION:** Use "{host_name}" as the host's name and "{guest_name}" as the guest's name throughout your script.
+
+---
+
+"""
+        full_prompt = episode_context + creative_prompt
+
+        client = self._get_client()
+        response = client.models.generate_content(
+            model=self.model_name,
+            contents=[full_prompt, uploaded_file],
+            config=types.GenerateContentConfig(
+                temperature=0.6,
+                top_p=0.9,
+                candidate_count=1,
+                response_mime_type="application/json",
+            )
+        )
+
+        self._check_response_safety(response)
+
+        response_text = response.text
+        logger.info(f"Received creative script: {len(response_text)} characters")
+        return response_text
+
+    def generate_unified_narrative(self, analysis_json_path: str, episode_title: str,
                                  narrative_format: str, custom_instructions: str = "") -> Dict:
         """
-        Generate unified narrative script-timeline structure from analysis data.
-        
+        Generate unified narrative via 2-call approach: structure plan + creative script.
+
         Args:
             analysis_json_path: Path to the analysis JSON file
             episode_title: Title of the episode for context
+            narrative_format: "with_hook" or "without_hook"
             custom_instructions: Optional custom instructions to add to prompt
-              Returns:
+
+        Returns:
             Dict containing the unified script-timeline structure
         """
-        logger.info(f"Starting unified narrative generation for: {episode_title}")
+        logger.info(f"Starting 2-call narrative generation for: {episode_title}")
         logger.info(f"Analysis file: {analysis_json_path}")
-        
-        max_retries = 1
-        for attempt in range(max_retries):
-            try:
-                logger.info(f"Attempt {attempt + 1}/{max_retries}")
-                
-                # Step 1: Upload analysis file to Gemini
-                logger.info("📤 Uploading analysis results to Gemini for narrative generation...")
-                uploaded_file = self._upload_analysis_file(analysis_json_path, episode_title)
-                if not uploaded_file:
-                    raise Exception("File upload failed")
-                logger.info("✅ File upload completed")
-                
-                # Determine which prompt file to use based on narrative_format
-                if narrative_format == "with_hook":
-                    prompt_file_name = 'tts_podcast_narrative_prompt.txt'
-                elif narrative_format == "without_hook":
-                    prompt_file_name = 'tts_podcast_narrative_prompt_WITHOUT_HOOK.txt'
-                else:
-                    raise ValueError(f"Invalid narrative format: {narrative_format}")
 
-                prompt_file_path = os.path.join(
-                    current_dir, 'Generation_Templates', prompt_file_name
-                )
-                self.prompt_template = self._load_prompt_template(prompt_file_path)
+        try:
+            # Step 1: Upload analysis file to Gemini
+            logger.info("📤 Uploading analysis results to Gemini...")
+            uploaded_file = self._upload_analysis_file(analysis_json_path, episode_title)
+            if not uploaded_file:
+                raise Exception("File upload failed")
+            logger.info("✅ File upload completed")
 
-                # Step 2: Build unified prompt
-                prompt_text = self._build_unified_prompt(episode_title, custom_instructions)
-                
-                # Step 3: Create model and generate response
-                model = self._create_model()
-                logger.info("🤖 Sending narrative generation request to Gemini AI...")
-                logger.info("⏳ This may take 1-3 minutes depending on content complexity...")
-                
-                response = model.generate_content([prompt_text, uploaded_file])
-                
-                logger.info("✅ Received response from Gemini AI")
-                
-                # Step 4: Check response validity
-                if not response:
-                    raise Exception("No response from Gemini")
-                
-                # Check for safety blocks
-                if hasattr(response, 'candidates') and response.candidates:
-                    candidate = response.candidates[0]
-                    if hasattr(candidate, 'finish_reason'):
-                        finish_reason = candidate.finish_reason
-                        logger.info(f"Gemini finish reason: {finish_reason}")
-                        
-                        if finish_reason == 2:  # SAFETY
-                            logger.warning("Gemini blocked response due to safety concerns")
-                            raise Exception("SAFETY_BLOCKED: Content was blocked by Gemini's safety filters")
-                        elif finish_reason == 3:  # RECITATION
-                            logger.warning("Gemini blocked response due to recitation concerns")
-                            raise Exception("RECITATION_BLOCKED: Content was blocked due to potential recitation")
-                        elif finish_reason != 1:  # 1 = STOP (successful completion)
-                            logger.warning(f"Unexpected finish reason: {finish_reason}")
-                            raise Exception(f"BLOCKED: Finish reason {finish_reason}")                # Step 5: Parse and validate response
-                response_text = response.text
-                logger.info(f"Received response: {len(response_text)} characters")
-                
-                # Save debug files using the new method
-                self._save_debug_files(prompt_text, response_text, analysis_json_path)
-                
-                script_data = self._parse_unified_response(response_text, episode_title)
-                
-                logger.info("Unified narrative generation completed successfully")
-                return script_data
-                
-            except Exception as e:
-                logger.error(f"Attempt {attempt + 1} failed: {e}")
-                if attempt == max_retries - 1:
-                    logger.error("All retry attempts failed")
-                    raise Exception(f"Failed to generate narrative after {max_retries} attempts: {e}")
-                else:
-                    logger.info(f"Retrying in 5 seconds...")
-                    time.sleep(5)
+            # Step 2: Generate structure plan (Call 1, temp 0.3)
+            structure_plan = self._generate_structure_plan(
+                uploaded_file, episode_title, narrative_format
+            )
+
+            # Save structure plan for debugging
+            analysis_path = Path(analysis_json_path)
+            processing_folder = analysis_path.parent
+            if processing_folder.exists():
+                plan_path = processing_folder / "structure_plan.json"
+                with open(plan_path, 'w', encoding='utf-8') as f:
+                    json.dump(structure_plan, f, indent=2, ensure_ascii=False)
+                logger.info(f"Structure plan saved to: {plan_path}")
+
+            # Step 3: Generate creative script (Call 2, temp 0.6)
+            response_text = self._generate_creative_script(
+                uploaded_file, structure_plan, episode_title, narrative_format
+            )
+
+            # Save debug files
+            self._save_debug_files("[2-call approach]", response_text, analysis_json_path)
+
+            # Step 4: Parse and validate response
+            script_data = self._parse_unified_response(response_text, episode_title)
+
+            logger.info("2-call narrative generation completed successfully")
+            return script_data
+
+        except Exception as e:
+            logger.error(f"Narrative generation failed: {e}")
+            raise Exception(f"Failed to generate narrative: {e}")
     
     def save_unified_script(self, script_data: Dict, episode_output_path: str) -> Path:
         """

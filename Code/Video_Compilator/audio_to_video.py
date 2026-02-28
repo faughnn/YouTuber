@@ -73,7 +73,22 @@ class AudioToVideoConverter:
     
     def __init__(self):
         # Initialize with Chris Morris Images folder
-        assets_path = r"C:\Users\nfaug\OneDrive - LIR\Desktop\YouTuber\Assets\Chris_Morris_Images"
+        # Check multiple possible locations for assets
+        possible_paths = [
+            Path(r"G:\YouTuber\Assets\Chris_Morris_Images"),
+            Path(r"C:\Users\nfaug\OneDrive - LIR\Desktop\YouTuber\Assets\Chris_Morris_Images"),
+            Path(__file__).parent.parent.parent / "Assets" / "Chris_Morris_Images"
+        ]
+
+        assets_path = None
+        for path in possible_paths:
+            if path.exists():
+                assets_path = path
+                break
+
+        if not assets_path:
+            raise FileNotFoundError(f"Chris_Morris_Images folder not found. Checked: {possible_paths}")
+
         self.image_manager = SimpleImageManager(assets_path)
         self.logger = logging.getLogger(__name__)
     

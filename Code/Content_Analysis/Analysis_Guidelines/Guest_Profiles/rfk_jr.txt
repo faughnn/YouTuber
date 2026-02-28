@@ -1,0 +1,64 @@
+# Guest-Specific Analysis Profile: Robert F. Kennedy Jr.
+
+## Guest Background
+
+Robert F. Kennedy Jr. is an environmental lawyer, anti-vaccine activist, and current U.S. Secretary of Health and Human Services (HHS). He founded Children's Health Defense, an organization that campaigns against vaccines. He has no formal training in medicine, immunology, virology, or epidemiology. His environmental law background gives him adjacent but non-applicable credentials that lend a false sense of scientific authority.
+
+**His position as HHS Secretary makes his health misinformation uniquely dangerous** — he has direct regulatory power over the agencies (FDA, CDC, NIH) he has spent years attacking.
+
+## Known Misinformation Patterns
+
+Watch specifically for these recurring claims and tactics:
+
+### 1. Vaccine Misinformation (CRITICAL priority)
+- Claims vaccines cause autism (based on the retracted Wakefield study)
+- Misrepresents VAERS data — treats self-reported, unverified adverse event reports as confirmed causal evidence
+- Claims childhood vaccine schedule is untested or dangerous
+- Alleges COVID-19 vaccines caused mass casualties, citing raw reporting numbers without context
+- "I'm not anti-vaccine, I'm pro-safety" — reframes opposition to vaccines as reasonable caution
+- Claims thimerosal/mercury in vaccines causes neurological damage (contradicted by extensive research)
+
+### 2. Study Misrepresentation (HIGH priority)
+- **His signature move**: Cites real, published scientific papers but draws conclusions the study authors explicitly do not support
+- Often references a study's raw data while ignoring the authors' own analysis and conclusions
+- Cherry-picks individual findings from large studies while ignoring the overall results
+- References retracted or widely criticized papers as though they are current valid science
+- **Gemini should fact-check any specific study claims he makes against what those studies actually conclude**
+
+### 3. Regulatory Capture Conspiracy (HIGH priority)
+- Core thesis: FDA, CDC, and NIH are "captured" by pharmaceutical companies they regulate
+- Claims regulatory agencies suppress evidence of vaccine harm to protect industry profits
+- Alleges a revolving door between pharma and government constitutes proof of conspiracy
+- Frames legitimate scientific consensus as industry-manufactured agreement
+- This is presented as established fact rather than theory, making it harder to identify as conspiratorial
+
+### 4. Pharma Conspiracy Claims (HIGH priority)
+- Claims pharmaceutical companies deliberately suppress cheap/effective treatments (e.g., ivermectin, hydroxychloroquine)
+- Alleges coordinated campaigns to discredit alternative treatments
+- Claims the 1986 National Childhood Vaccine Injury Act removed all accountability from vaccine manufacturers (misrepresents the law — VICP still provides compensation pathway)
+- Alleges profit motive as the sole driver of vaccination policy
+
+### 5. Credential/Authority Exploitation
+- Leverages Kennedy family name for credibility on health topics
+- His environmental law background gives an appearance of scientific literacy without actual medical expertise
+- As HHS Secretary, his statements carry implicit governmental authority
+- Often says "I've read the studies" or "I've talked to the scientists" as a substitute for actual expertise
+
+## Rhetorical Strategies Specific to RFK Jr.
+
+In addition to the standard strategies in the base rules, watch for:
+
+- **Lawyerly evidence framing**: Presents individual case stories and anecdotes as dispositive proof (as in a courtroom) rather than statistical outliers (as in science). Treats VAERS reports like witness testimony.
+- **Safety concern reframing**: Positions anti-vaccine advocacy as "just wanting more safety testing" or "asking questions" to appear moderate
+- **Institutional distrust bootstrapping**: Uses real, documented instances of pharma misconduct (e.g., Vioxx, OxyContin) to justify blanket distrust of all pharmaceutical products and regulatory decisions
+- **Selective whistleblower elevation**: Amplifies fringe scientists who support his views while dismissing the overwhelming consensus as corrupted
+- **Historical Kennedy appeal**: Invokes his family's legacy of public service to lend moral authority to health claims
+
+## Classification Guidance
+
+- Claims about vaccine safety that contradict scientific consensus → **Misinformation** (Health/Medical)
+- "FDA/CDC are controlled by pharma" narrative → **Conspiracy Theory** (Big Pharma Suppression of Cures)
+- Misrepresentation of scientific studies → **Misinformation** (Health/Medical) with rhetorical strategy "Cherry-Picking"
+- VAERS data misuse → **Promotion of Pseudoscience** (note: VAERS is real but using it as causal proof is pseudoscientific methodology)
+- "They're trying to silence me" → **Societal Damage Contribution** (Eroding Trust in Science/Medical Institutions)
+- Policy statements based on misinformation (as HHS Secretary) → **CRITICAL severity** regardless of other factors

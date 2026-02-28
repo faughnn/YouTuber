@@ -102,7 +102,8 @@ class EnhancedPipelineLogger:
             "generation": StageConfig("Narrative Generation", StageType.GENERATION, color="magenta"),
             "tts": StageConfig("Audio Generation", StageType.TTS, color="cyan"),
             "video": StageConfig("Video Clipping", StageType.VIDEO, color="yellow"),
-            "compilation": StageConfig("Video Compilation", StageType.COMPILATION, color="red")
+            "compilation": StageConfig("Video Compilation", StageType.COMPILATION, color="red"),
+            "description": StageConfig("YouTube Description", StageType.GENERATION, color="magenta")
         }
     
     def _setup_root_logger(self):

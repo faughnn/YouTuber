@@ -174,6 +174,11 @@ Stage 7: Video Compilation
 - Combines generated audio with video clips
 - Creates final polished video output
 - Handles timing synchronization and transitions
+
+Stage 8: YouTube Description Generation
+- Generates formatted document with claims, verdicts, and sources
+- Uses Google Search to find real source URLs
+- Creates youtube_description.txt for video description
 """
 
 import os
@@ -213,15 +218,19 @@ from Content_Analysis.transcript_analyzer import analyze_with_gemini_file_upload
 # Stage 4: Narrative Generation - Direct import
 from Content_Analysis.podcast_narrative_generator import NarrativeCreatorGenerator
 
-# Stage 5: Audio Generation - Direct import  
+# Stage 5: Audio Generation - Direct import
 from Chatterbox.simple_tts_engine import SimpleTTSEngine
 from ElevenLabs.elevenlabs_tts_engine import ElevenLabsTTSEngine
+from EdgeTTS.edge_tts_engine import EdgeTTSEngine
 
 # Stage 6: Video Clipping - Direct import
 from Video_Clipper.integration import extract_clips_from_script
 
 # Stage 7: Video Compilation - Direct import
 from Video_Compilator import SimpleCompiler
+
+# Stage 8: YouTube Description Generation - Direct import
+from Content_Analysis.youtube_description_generator import generate_youtube_description
 
 # Utility imports - Direct usage
 from Utils.file_organizer import FileOrganizer
@@ -245,14 +254,16 @@ class MasterProcessorV2:
     - Session tracking and cleanup
     """
     
-    def __init__(self, config_path: Optional[str] = None, verbosity: LogLevel = LogLevel.NORMAL):
+    def __init__(self, config_path: Optional[str] = None, verbosity: LogLevel = LogLevel.NORMAL, autonomous: bool = False):
         """
         Initialize orchestrator with enhanced logging system.
-        
+
         Args:
             config_path: Path to configuration file (optional)
             verbosity: Logging verbosity level
+            autonomous: If True, skip all user prompts and use auto-extracted names
         """
+        self.autonomous = autonomous
         # Load configuration directly - no complex config abstraction
         self.config_path = config_path or self._get_default_config_path()
         self.config = self._load_config()
@@ -293,29 +304,50 @@ class MasterProcessorV2:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(script_dir, "Config", "default_config.yaml")
     
+    def _expand_env_vars(self, obj):
+        """
+        Recursively expand ${VAR} environment variable references in config values.
+        """
+        import re
+        if isinstance(obj, str):
+            # Match ${VAR} pattern and replace with environment variable value
+            pattern = r'\$\{([^}]+)\}'
+            def replace_var(match):
+                var_name = match.group(1)
+                return os.environ.get(var_name, match.group(0))  # Keep original if not found
+            return re.sub(pattern, replace_var, obj)
+        elif isinstance(obj, dict):
+            return {k: self._expand_env_vars(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._expand_env_vars(item) for item in obj]
+        return obj
+
     def _load_config(self) -> Dict:
         """
         Simple YAML configuration loading - no complex config abstraction.
-        
+
         Returns:
             Dict: Configuration dictionary
         """
         try:
             with open(self.config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
-            
+
+            # Expand environment variables in config values
+            config = self._expand_env_vars(config)
+
             # Expand relative paths to absolute paths
             script_dir = os.path.dirname(os.path.abspath(__file__))
             base_dir = os.path.dirname(script_dir)  # YouTuber directory
-            
+
             # Resolve relative paths in config
             if 'paths' in config:
                 for key, path in config['paths'].items():
                     if not os.path.isabs(path):
                         config['paths'][key] = os.path.normpath(os.path.join(base_dir, path))
-            
+
             return config
-            
+
         except Exception as e:
             print(f"Error loading configuration: {e}")
             raise Exception(f"Configuration loading failed: {e}")
@@ -647,25 +679,46 @@ class MasterProcessorV2:
             rule_used = extracted_names.get('rule_used', 'unknown')
             self.enhanced_logger.info(f"Name extraction: Host='{extracted_names['host']}' Guest='{extracted_names['guest']}' (Rule: {rule_used})")
             
-            # Step 3: Conditional User Verification
+            # Step 3: Conditional User Verification (skipped in autonomous mode)
             config = get_config()
             should_verify = (
-                config.get('settings', {}).get('prompt_for_verification', False) or
-                not extracted_names['guest'] or 
-                extracted_names['guest'] == 'No Guest'
+                not self.autonomous and (
+                    config.get('settings', {}).get('prompt_for_verification', False) or
+                    not extracted_names['guest'] or
+                    extracted_names['guest'] == 'No Guest'
+                )
             )
-            
-            if should_verify:
-                self.enhanced_logger.info("🔍 User verification required...")
+
+            if self.autonomous:
+                self.enhanced_logger.info("Autonomous mode - skipping user verification")
+                final_names = extracted_names
+                final_names['_user_verified'] = False
+
+                # Apply CLI name overrides if provided
+                overrides = getattr(self, '_name_overrides', None)
+                if overrides:
+                    if overrides.get('host'):
+                        final_names['host'] = overrides['host']
+                        self.enhanced_logger.info(f"CLI override: Host='{overrides['host']}'")
+                    if overrides.get('guest'):
+                        final_names['guest'] = overrides['guest']
+                        self.enhanced_logger.info(f"CLI override: Guest='{overrides['guest']}'")
+
+                # Use fallback for missing guest in autonomous mode
+                if not final_names.get('guest') or final_names['guest'] == 'No Guest':
+                    final_names['guest'] = 'Guest'
+                    self.enhanced_logger.info("Autonomous mode - using 'Guest' as fallback name")
+            elif should_verify:
+                self.enhanced_logger.info("User verification required...")
                 if not extracted_names['guest'] or extracted_names['guest'] == 'No Guest':
                     self.enhanced_logger.warning("Name extraction failed, triggered verification")
-                
+
                 verified_names = UserVerification.prompt_for_verification(extracted_names, metadata)
-                
+
                 # Log any corrections made
                 if verified_names['host'] != extracted_names['host'] or verified_names['guest'] != extracted_names['guest']:
                     self.enhanced_logger.info(f"User correction: Host='{extracted_names['host']}' -> '{verified_names['host']}', Guest='{extracted_names['guest']}' -> '{verified_names['guest']}'")
-                
+
                 final_names = verified_names
                 # Mark that user verification occurred
                 final_names['_user_verified'] = True
@@ -774,8 +827,10 @@ class MasterProcessorV2:
             # Direct call to working module with progress spinner
             with self.enhanced_logger.spinner("Initializing audio diarization"):
                 time.sleep(0.5)  # Brief pause for UI
-                hf_token = self.config.get('api', {}).get('huggingface_token') or os.getenv('HuggingFaceToken')
-                if not hf_token:
+                hf_token = self.config.get('api', {}).get('huggingface_token') or os.getenv('HuggingFaceToken') or os.getenv('HUGGINGFACE_TOKEN')
+                if hf_token:
+                    self.enhanced_logger.info(f"[DEBUG] HF Token found: {hf_token[:10]}...{hf_token[-4:]}")
+                else:
                     self.enhanced_logger.warning("No HuggingFace token found in config or environment variables")
             
             self.enhanced_logger.info("Starting audio diarization and transcription...")
@@ -814,88 +869,96 @@ class MasterProcessorV2:
     
     def _stage_3_content_analysis(self, transcript_path: str) -> str:
         """
-        Stage 3: Two-Pass AI Quality Control System (Pass 1 Analysis only for compatibility).
-        
-        This method now delegates to the Two-Pass Controller but returns the Pass 1
-        analysis path for backward compatibility with existing pipeline stages.
-        
+        Stage 3: Multi-Pass AI Quality Control System (Pass 1 Analysis).
+
+        This method delegates to the Multi-Pass Controller and executes Pass 1
+        (transcript analysis). Returns the Pass 1 analysis path for Stage 4.
+
         Args:
             transcript_path: Path to transcript file
-            
+
         Returns:
-            str: Pass 1 analysis result file path (for compatibility)
+            str: Pass 1 analysis result file path (for Stage 4)
         """
         try:
-            # Import two-pass controller
-            from Content_Analysis.two_pass_controller import create_two_pass_controller
-            
+            # Import multi-pass controller (new binary filtering system)
+            from Content_Analysis.multi_pass_controller import create_multi_pass_controller
+
             # Create controller instance
-            controller = create_two_pass_controller(
+            controller = create_multi_pass_controller(
                 config=self.config,
                 episode_dir=self.episode_dir,
                 enhanced_logger=self.enhanced_logger
             )
-            
-            # Execute Pass 1 only (for backward compatibility with stage 4)
+
+            # Execute Pass 1 only (transcript analysis)
             pass1_output = controller._execute_pass_1_analysis(transcript_path)
-            
-            self.enhanced_logger.success("Two-Pass Stage 3 (Pass 1) completed successfully!")
+
+            self.enhanced_logger.success("Multi-Pass Stage 3 (Pass 1) completed successfully!")
             return pass1_output
-            
+
         except Exception as e:
             self.enhanced_logger.error(f"Stage 3 failed: [red]{str(e)}[/red]")
             raise Exception(f"Content analysis failed: {e}")
     
     def _stage_4_narrative_generation(self, analysis_path: str, narrative_format: str = "with_hook") -> str:
         """
-        Stage 4: Two-Pass AI Quality Control System (Complete Pipeline).
-        
-        This method now executes the complete two-pass pipeline starting from Pass 1 output,
-        including Pass 2 quality assessment, script generation, and rebuttal verification.
-        
+        Stage 4: Multi-Pass Binary Filtering Pipeline (Complete Pipeline).
+
+        This method executes the complete multi-pass pipeline starting from Pass 1 output:
+        1. Binary Segment Filtering (5 gates)
+        2. Diversity-Aware Selection
+        3. False Negative Recovery
+        4. Script Generation
+        5. Output Quality Gate
+        6. Binary Rebuttal Verification (4 gates + self-correction)
+        7. External Fact Validation (if available)
+
         Args:
             analysis_path: Path to Pass 1 analysis file
             narrative_format: Format for narrative generation ("with_hook" or "without_hook")
-            
+
         Returns:
             str: Verified unified podcast script file path (final output)
         """
         try:
-            # Import two-pass controller
-            from Content_Analysis.two_pass_controller import create_two_pass_controller
-            
+            # Import multi-pass controller (new binary filtering system)
+            from Content_Analysis.multi_pass_controller import create_multi_pass_controller
+
             # Create controller instance
-            controller = create_two_pass_controller(
+            controller = create_multi_pass_controller(
                 config=self.config,
                 episode_dir=self.episode_dir,
                 enhanced_logger=self.enhanced_logger
             )
-            
-            # Execute Pass 2, Script Generation, and Verification starting from Pass 1 output
-            self.enhanced_logger.info("🎯 Starting Two-Pass Pipeline from Pass 1 output...")
-            
-            # Execute Pass 2: Quality Assessment
-            with self.enhanced_logger.stage_context("analysis"):
-                pass2_output = controller._execute_pass_2_quality(analysis_path)
-            
-            # Execute Script Generation
-            with self.enhanced_logger.stage_context("generation"):
-                script_output = controller._execute_script_generation(pass2_output, narrative_format)
-            
-            # Execute Rebuttal Verification
-            with self.enhanced_logger.stage_context("generation"):
-                verified_output = controller._execute_rebuttal_verification(script_output)
-            
-            self.enhanced_logger.success("Two-Pass Pipeline completed successfully!")
-            self.enhanced_logger.info(f"Final verified script: [green]{os.path.basename(verified_output)}[/green]")
-            
-            # For backward compatibility, return the verified script path
-            # This ensures existing TTS stages receive the final, verified script
-            return verified_output
-            
+
+            # Execute full multi-pass pipeline from transcript
+            # The controller will use cached Pass 1 results if available
+            self.enhanced_logger.info("🎯 Starting Multi-Pass Binary Filtering Pipeline...")
+
+            # Get the transcript path to run the full pipeline
+            # The pipeline checks for cached Pass 1 results automatically
+            processing_dir = os.path.join(self.episode_dir, "Processing")
+            transcript_path = os.path.join(processing_dir, "original_audio_transcript.json")
+
+            # Run the complete pipeline (Pass 1 will use cache, then run all other stages)
+            final_script_path, pipeline_metadata = controller.run_full_pipeline(
+                transcript_path=transcript_path,
+                narrative_format=narrative_format
+            )
+
+            # Log pipeline summary
+            self.enhanced_logger.success("Multi-Pass Pipeline completed successfully!")
+            self.enhanced_logger.info(f"Final verified script: [green]{os.path.basename(final_script_path)}[/green]")
+            self.enhanced_logger.info(f"Pipeline duration: {pipeline_metadata['total_duration_seconds']:.1f}s")
+            self.enhanced_logger.info(f"Stages completed: {len(pipeline_metadata['completed_stages'])}/8")
+
+            # Return the verified script path for TTS stages
+            return final_script_path
+
         except Exception as e:
             self.enhanced_logger.error(f"Stage 4 failed: [red]{str(e)}[/red]")
-            raise Exception(f"Two-pass narrative generation failed: {e}")
+            raise Exception(f"Multi-pass narrative generation failed: {e}")
 
     def _stage_5_audio_generation(self, script_path: str, tts_provider: str = "chatterbox") -> Dict:
         """
@@ -1172,13 +1235,52 @@ class MasterProcessorV2:
             self.enhanced_logger.error(f"Video compilation failed: {e}")
             raise Exception(f"Video compilation failed: {e}")
 
+    def _stage_8_youtube_description(self, script_path: str) -> Dict:
+        """
+        Stage 8: Generate YouTube description with claims, verdicts, and sources.
+
+        Args:
+            script_path: Path to verified_unified_script.json from Stage 4
+
+        Returns:
+            Dict with success status and output path
+        """
+        self.enhanced_logger.info("Generating YouTube description document...")
+
+        try:
+            # Determine the output directory
+            output_dir = os.path.join(self.episode_dir, "Output", "Scripts")
+
+            # Generate the description
+            result = generate_youtube_description(
+                script_path=script_path,
+                output_dir=output_dir,
+                config=self.config
+            )
+
+            if result.get('success'):
+                self.enhanced_logger.success(f"YouTube description generated: {result.get('output_path')}")
+            else:
+                self.enhanced_logger.warning(f"YouTube description generation had issues: {result.get('error')}")
+
+            return result
+
+        except Exception as e:
+            self.enhanced_logger.error(f"YouTube description generation failed: {e}")
+            # Don't fail the pipeline for this optional step
+            return {
+                'success': False,
+                'error': str(e),
+                'output_path': None
+            }
+
     # ========================================================================
     # PIPELINE COORDINATION FRAMEWORK - Simple orchestration
     # ========================================================================
     
     def process_full_pipeline(self, url: str, tts_provider: str = "chatterbox", narrative_format: str = None) -> str:
         """
-        Execute all 7 stages with enhanced logging and progress tracking.
+        Execute all 8 stages with enhanced logging and progress tracking.
         
         Args:
             url: YouTube URL to process
@@ -1223,17 +1325,22 @@ class MasterProcessorV2:
             # Stage 7: Video Compilation
             with self.enhanced_logger.stage_context("compilation", 7):
                 stage7_result = self._stage_7_video_compilation(stage5_result, stage6_result)
-            
+
+            # Stage 8: YouTube Description Generation
+            with self.enhanced_logger.stage_context("description", 8):
+                stage8_result = self._stage_8_youtube_description(stage4_result)
+
             # Pipeline completion summary
             total_time = time.time() - start_time
             self.enhanced_logger.success(f"🎉 Full Pipeline Complete!")
             self.enhanced_logger.display_summary_table("Pipeline Summary", {
                 "Final Video": stage7_result,
+                "YouTube Description": stage8_result.get('output_path', 'N/A'),
                 "Episode Directory": self.episode_dir,
                 "Total Processing Time": f"{total_time:.1f}s",
                 "Session ID": self.session_id
             })
-            
+
             return stage7_result
             
         except Exception as e:
@@ -1322,15 +1429,17 @@ class MasterProcessorV2:
     def _get_tts_engine(self, provider: str):
         """
         Factory method to get the appropriate TTS engine based on provider.
-        
+
         Args:
-            provider: TTS provider ("chatterbox" or "elevenlabs")
-            
+            provider: TTS provider ("chatterbox", "elevenlabs", or "edgetts")
+
         Returns:
             TTS engine instance
         """
         if provider.lower() == "elevenlabs":
             return ElevenLabsTTSEngine(self.config_path)
+        elif provider.lower() == "edgetts":
+            return EdgeTTSEngine(self.config_path)
         else:
             return SimpleTTSEngine(self.config_path)
 
@@ -1397,11 +1506,23 @@ Examples:
     # TTS provider option
     parser.add_argument(
         '--tts-provider',
-        choices=['chatterbox', 'elevenlabs'],
-        default='chatterbox',
-        help='TTS provider for audio generation (default: chatterbox)'
+        choices=['chatterbox', 'elevenlabs', 'edgetts'],
+        default='edgetts',
+        help='TTS provider for audio generation (default: edgetts)'
     )
     
+    # Name override options (skip auto-extraction)
+    parser.add_argument(
+        '--host',
+        type=str,
+        help='Override host name (e.g. "Joe Rogan")'
+    )
+    parser.add_argument(
+        '--guest',
+        type=str,
+        help='Override guest name (e.g. "Bret Weinstein")'
+    )
+
     # Logging verbosity options
     verbosity_group = parser.add_mutually_exclusive_group()
     verbosity_group.add_argument(
@@ -1419,7 +1540,7 @@ Examples:
         action='store_true',
         help='Full debug output with all details'
     )
-    
+
     return parser
 
 
@@ -1454,22 +1575,29 @@ def main():
         else:
             verbosity = LogLevel.NORMAL
         
-        # Initialize orchestrator with enhanced logging
-        processor = MasterProcessorV2(config_path=args.config, verbosity=verbosity)
-        
+        # CLI always runs in autonomous mode (no interactive prompts)
+        processor = MasterProcessorV2(config_path=args.config, verbosity=verbosity, autonomous=True)
+
+        # Apply name overrides if provided
+        if args.host or args.guest:
+            processor._name_overrides = {
+                'host': args.host,
+                'guest': args.guest,
+            }
+
         # Execute requested pipeline
         if args.full_pipeline:
             result = processor.process_full_pipeline(args.input, args.tts_provider)
             if verbosity != LogLevel.QUIET:
                 print(f"\n🎉 Full pipeline completed!")
                 print(f"📁 Final video: {result}")
-            
+
         elif args.audio_only:
             result = processor.process_audio_only(args.input, args.tts_provider)
             if verbosity != LogLevel.QUIET:
                 print(f"\n🎵 Audio-only pipeline completed!")
                 print(f"📁 Results: {result}")
-            
+
         elif args.script_only:
             result = processor.process_until_script(args.input)
             if verbosity != LogLevel.QUIET:

@@ -1,0 +1,89 @@
+# Narrative Structure Planning
+
+You are planning the structure for a media literacy podcast episode. You are NOT writing the script yet — only creating a structured plan that a creative writer will follow.
+
+## INPUT
+You will receive:
+1. A JSON array of pre-analyzed harmful content segments from a podcast
+2. Episode context (host name, guest name, episode title)
+
+## YOUR TASK
+Create a detailed structure plan that determines:
+- Which clip to use as the hook (if applicable)
+- How to order and group the remaining clips
+- Which segments to skip (if any have weak or marginal content)
+- What research the writer should incorporate about the guest
+- Per-segment rebuttal strategies based on the upstream analysis metadata
+
+## PLANNING GUIDELINES
+
+### Clip Selection & Ordering
+- Select the most impactful clip as the hook (highest severity, most egregious content)
+- Group remaining clips by theme when natural (medical misinformation, conspiracy theories, etc.)
+- If clips don't connect thematically, order by impact or chronologically
+- If any segment has weak or marginal content, mark it for skipping
+
+### Upstream Metadata Usage
+For each segment, review and incorporate:
+- `harm_category`: What type of harm this represents
+- `identified_rhetorical_strategies`: Specific manipulation techniques used
+- `potential_societal_impacts`: Real-world consequences to highlight
+- `severity_rating`: How critical this content is
+- `confidence_level`: How certain the analysis is
+
+### Rebuttal Strategy
+For each included segment, plan:
+- Primary angle of attack (factual correction, logical fallacy exposure, source critique)
+- Key evidence needed (studies, expert quotes, data)
+- Rhetorical approach (humor, outrage, irony — based on content severity)
+- Steelman opportunity: Does the guest make ANY valid underlying point that gets
+  ruined by exaggeration, cherry-picking, or conspiracy logic? If yes, note it.
+  Acknowledging the kernel of truth before showing how they overextend makes the
+  analysis more credible. Not every segment will have this — only flag genuine cases.
+
+## REQUIRED OUTPUT FORMAT
+
+Return a JSON object with this structure:
+
+```json
+{
+  "episode_overview": {
+    "primary_theme": "main theme of the episode",
+    "guest_research_notes": "key points about guest background, credentials, controversies to research",
+    "total_segments_provided": 0,
+    "segments_to_include": 0,
+    "segments_to_skip": 0
+  },
+  "hook_selection": {
+    "segment_id": "id of the hook segment",
+    "reason": "why this is the strongest hook",
+    "severity": "severity level"
+  },
+  "clip_order": [
+    {
+      "segment_id": "segment_id",
+      "position": 1,
+      "thematic_group": "group label or null",
+      "skip": false,
+      "skip_reason": null,
+      "harm_category": "from upstream",
+      "rhetorical_strategies": ["from upstream"],
+      "societal_impacts": ["from upstream"],
+      "rebuttal_strategy": {
+        "primary_angle": "factual_correction|logical_fallacy|source_critique|reasoning_analysis",
+        "key_evidence_needed": ["specific evidence to find"],
+        "rhetorical_approach": "humor|outrage|irony|measured_analysis",
+        "connection_to_previous": "how this links to prior clip, or null",
+        "steelman_opportunity": "valid underlying point the guest makes that gets ruined by overextension, or null"
+      }
+    }
+  ],
+  "thematic_groups": [
+    {
+      "label": "group name",
+      "segment_ids": ["ids in this group"],
+      "transition_strategy": "how to bridge between this group and the next"
+    }
+  ]
+}
+```

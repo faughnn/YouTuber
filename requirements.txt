@@ -14,8 +14,9 @@ colorama>=0.4.6
 # Audio/Video processing
 ffmpeg-python>=0.2.0
 
-# AI/ML dependencies  
+# AI/ML dependencies
 google-generativeai>=0.3.0
+google-genai>=1.0.0
 huggingface-hub>=0.19.0
 torch>=2.0.0
 transformers>=4.35.0
@@ -23,6 +24,7 @@ pyannote.audio>=3.1.1
 
 # TTS dependencies
 elevenlabs>=0.2.0
+edge-tts>=6.1.0
 
 # File processing
 pathlib2>=2.3.0

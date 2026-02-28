@@ -2,24 +2,30 @@
 
 ## I. Introduction and Goal for Gemini
 
-This document outlines the ruleset for analyzing podcast transcripts for harmful content. The primary objective is to identify, categorize, and document segments containing Dangerous Misinformation, Conspiracy Theories, Promotion of Pseudoscience, and instances that contribute to Societal Damage. The analysis must be rigorous, evidence-based (drawing from the provided transcript data), and adhere to the definitions and output formats specified herein.
+This document outlines the ruleset for analyzing podcast transcripts for harmful content. The primary objective is to identify, categorize, and document segments containing Misinformation, Conspiracy Theories, Promotion of Pseudoscience, and instances that contribute to Societal Damage. The analysis must be rigorous, evidence-based (drawing from the provided transcript data), and adhere to the definitions and output formats specified herein.
 
-Your task is to process the full podcast transcript data provided and identify up to a maximum 20 distinct segments that exemplify one or more of the defined harm categories. For each segment, you will extract specific information and structure it according to the JSON schema detailed in Section IV. The goal is to create a dataset that allows for a nuanced understanding of the prevalence and nature of potentially harmful content within influential media platforms. Precision in classification, quote extraction, and adherence to the structured output format is paramount.
+Your task is to process the full podcast transcript data provided and identify harmful segments. The number of segments depends on the transcript duration:
+- Under 1 hour: 8-12 segments
+- 1-2 hours: 12-16 segments
+- 2-3 hours: 16-20 segments
+- Over 3 hours: 20-25 segments
+
+These segments should exemplify one or more of the defined harm categories. For each segment, you will extract specific information and structure it according to the JSON schema detailed in Section IV. The goal is to create a dataset that allows for a nuanced understanding of the prevalence and nature of potentially harmful content within influential media platforms. Precision in classification, quote extraction, and adherence to the structured output format is paramount.
 
 ## II. Core Definitions for Analysis
 
 To ensure consistent and accurate analysis, the following definitions must be applied. These definitions are derived from academic and institutional sources and are tailored for content analysis of podcast media.
 
-### A. Dangerous Misinformation
+### A. Misinformation
 
-**Definition:** "Dangerous Misinformation" refers to information that is false, inaccurate, or misleading, and which poses a significant risk of harm to individuals, groups, or society at large. This harm can be physical, psychological, financial, or societal (e.g., undermining public health, democratic processes, or scientific understanding). The classification of information as "Dangerous Misinformation" should focus on the content itself and its potential for harm.
+**Definition:** "Misinformation" refers to information that is false, inaccurate, or misleading, and which poses a significant risk of harm to individuals, groups, or society at large. This harm can be physical, psychological, financial, or societal (e.g., undermining public health, democratic processes, or scientific understanding). The classification of information as "Misinformation" should focus on the content itself and its potential for harm.
 
 **Key Characteristics:**
 - Contradicts verifiable facts or established expert consensus (e.g., scientific, medical, historical)
 - Has the potential to lead to negative real-world consequences if believed or acted upon
 - May involve various forms of falsity, including fabricated content, manipulated content, or misleading framing
 
-**Application Guidance:** When identifying "Dangerous Misinformation," consider the severity of the potential harm. For example, false claims about medical treatments or public safety are typically more dangerous than minor factual inaccuracies on trivial topics. The focus is on information that can cause tangible harm or significantly mislead the public on important issues.
+**Application Guidance:** When identifying "Misinformation," consider the severity of the potential harm. For example, false claims about medical treatments or public safety are typically more dangerous than minor factual inaccuracies on trivial topics. The focus is on information that can cause tangible harm or significantly mislead the public on important issues.
 
 ### B. Conspiracy Theory
 
@@ -38,7 +44,7 @@ To ensure consistent and accurate analysis, the following definitions must be ap
 
 ### C. Societal Damage Contribution
 
-**Definition:** "Societal Damage Contribution" refers to content that, while not necessarily fitting neatly into "Dangerous Misinformation" (i.e., overtly false) or "Conspiracy Theory" (i.e., a secret plot), still demonstrably contributes to negative societal outcomes. This includes content that erodes social cohesion, promotes harmful stereotypes, normalizes or incites hate, undermines democratic norms, or significantly polarizes public discourse in a detrimental way.
+**Definition:** "Societal Damage Contribution" refers to content that, while not necessarily fitting neatly into "Misinformation" (i.e., overtly false) or "Conspiracy Theory" (i.e., a secret plot), still demonstrably contributes to negative societal outcomes. This includes content that erodes social cohesion, promotes harmful stereotypes, normalizes or incites hate, undermines democratic norms, or significantly polarizes public discourse in a detrimental way.
 
 **Key Characteristics:**
 - May involve the spread of malinformation (truthful information used to inflict harm, e.g., doxing, strategic release of private data out of context)
@@ -60,7 +66,7 @@ To ensure consistent and accurate analysis, the following definitions must be ap
 - May include promotion of unregulated treatments, supplements, or practices with exaggerated or unsubstantiated benefits
 - Can involve misrepresentation of legitimate scientific concepts or selective citation of scientific literature
 
-**Application Guidance:** Identify segments where speakers present pseudoscientific claims as legitimate science, particularly in health, wellness, physics, psychology, or other scientific domains. Focus on content that could mislead audiences about the nature of scientific evidence or consensus. This differs from "Dangerous Misinformation" in that pseudoscience may not always pose immediate harm but undermines scientific literacy and evidence-based thinking. It differs from "Conspiracy Theory" in that it doesn't necessarily allege coordinated deception, just promotes bad science. Consider the guest's credentials, the quality of evidence presented, and whether claims align with scientific consensus.
+**Application Guidance:** Identify segments where speakers present pseudoscientific claims as legitimate science, particularly in health, wellness, physics, psychology, or other scientific domains. Focus on content that could mislead audiences about the nature of scientific evidence or consensus. This differs from "Misinformation" in that pseudoscience may not always pose immediate harm but undermines scientific literacy and evidence-based thinking. It differs from "Conspiracy Theory" in that it doesn't necessarily allege coordinated deception, just promotes bad science. Consider the guest's credentials, the quality of evidence presented, and whether claims align with scientific consensus.
 
 ## III. Detailed Instructions for Transcript Segmentation and Analysis
 
@@ -68,16 +74,16 @@ To ensure consistent and accurate analysis, the following definitions must be ap
 
 You will employ a combination of conceptual analysis and relational analysis:
 
-- **Conceptual Analysis:** Identify the presence and frequency of specific concepts, terms, claims, and themes related to the core definitions (Dangerous Misinformation, Conspiracy Theory, Promotion of Pseudoscience, Societal Damage Contribution)
+- **Conceptual Analysis:** Identify the presence and frequency of specific concepts, terms, claims, and themes related to the core definitions (Misinformation, Conspiracy Theory, Promotion of Pseudoscience, Societal Damage Contribution)
 - **Relational Analysis:** Examine the relationships between these concepts within the transcript. How are claims linked? What concepts frequently co-occur (proximity analysis)? This helps understand how harmful narratives are constructed and reinforced
 
 ### B. Identifying Harmful Segments
 
-**Segment Definition:** A "segment" is a continuous portion of the podcast transcript where a specific instance of Dangerous Misinformation, a Conspiracy Theory, Promotion of Pseudoscience, or a clear contribution to Societal Damage is articulated, discussed, or promoted. The selected clip for analysis should be **ideally at least 30 seconds, targeting around 90 seconds, with a STRICT maximum of 120 seconds (2 minutes). NO EXCEPTIONS.**
+**Segment Definition:** A "segment" is a continuous portion of the podcast transcript where a specific instance of Misinformation, a Conspiracy Theory, Promotion of Pseudoscience, or a clear contribution to Societal Damage is articulated, discussed, or promoted. The selected clip has a **MINIMUM duration of 25 seconds** — clips shorter than 25 seconds MUST be expanded by including more surrounding context from the same conversation thread, or rejected entirely if expansion is not possible. The target duration is approximately 90 seconds, with a default maximum of 120 seconds. For multi-part arguments where splitting would lose critical context, clips may extend up to 180 seconds — set `"extended_clip": true` in the segment output.
 
 **Criteria for Segmentation:**
 - Segments should be thematically coherent, focusing on a particular harmful claim or narrative
-- A segment can range from a few sentences to several minutes of conversation, but the final extracted clip should ideally be at least 30 seconds, targeting around 90 seconds, with a STRICT maximum of 120 seconds (2 minutes). NO EXCEPTIONS.
+- A segment can range from a few sentences to several minutes of conversation, but the final extracted clip **MUST be at least 25 seconds** (clips under 25 seconds lack sufficient context for meaningful analysis). Target around 90 seconds, with a default maximum of 120 seconds (up to 180 seconds for multi-part arguments with `"extended_clip": true`).
 - Identify shifts in topic, speaker, or a notable intensification of harmful rhetoric as potential segment boundaries
 - Prioritize segments where the harmful content is explicit and central to the discussion
 - The goal is to find 20 of the most illustrative and impactful segments across the entire transcript corpus
@@ -111,8 +117,8 @@ For each of the 20 identified segments, you will populate a JSON object with the
 - **primary_speaker_of_quote:** Identify the main speaker promoting the harmful content within the selected clip
 - **severityRating:** Rate the severity of the potential harm as 'CRITICAL', 'HIGH', 'MEDIUM', or 'LOW'
 - **harm_category:**
-  - **primary_type:** Choose one dominant harm type: 'Dangerous Misinformation', 'Conspiracy Theory', 'Promotion of Pseudoscience', or 'Societal Damage Contribution'
-  - **misinformation_subtype** (Array): If primary_type is 'Dangerous Misinformation', select one or more relevant subtypes from Table 1 or use: 'Health/Medical', 'Election Integrity', 'Scientific Denial (Climate, etc.)', 'Historical Revisionism', 'Financial/Economic', 'Other (Specify)'
+  - **primary_type:** Choose one dominant harm type: 'Misinformation', 'Conspiracy Theory', 'Promotion of Pseudoscience', or 'Societal Damage Contribution'
+  - **misinformation_subtype** (Array): If primary_type is 'Misinformation', select one or more relevant subtypes from Table 1 or use: 'Health/Medical', 'Election Integrity', 'Scientific Denial (Climate, etc.)', 'Historical Revisionism', 'Financial/Economic', 'Other (Specify)'
   - **conspiracy_theme** (Array): If primary_type is 'Conspiracy Theory', select one or more themes such as: 'Anti-Vaccine', 'New World Order/Global Elite', 'Election Fraud/Stolen Election', 'Deep State', 'COVID-19 Origins/Lab Leak (conspiratorial)', 'Big Pharma Suppression of Cures', 'Other (Specify)'
   - **pseudoscience_subtype** (Array): If primary_type is 'Promotion of Pseudoscience', select one or more subtypes such as: 'Alternative Medicine/Unproven Treatments', 'Supplement/Wellness Claims', 'Fringe Physics/Energy Healing', 'Evolutionary Psychology Misapplication', 'Nutritional Pseudoscience', 'Exercise/Fitness Myths', 'Cognitive Enhancement Claims', 'Other (Specify)'
 - **identified_rhetorical_strategies (Array):** List observed rhetorical strategies from Table 2 or other common fallacies (e.g., 'Appeal to Emotion', 'Cherry-Picking Data', 'Just Asking Questions')
@@ -120,14 +126,15 @@ For each of the 20 identified segments, you will populate a JSON object with the
 - **confidence_in_classification:** Rate your confidence: 'High', 'Medium', or 'Low - requires human review'
 - **brief_reasoning_for_classification:** Provide a concise (1-2 sentences) justification for why this segment was selected and how it aligns with the assigned primary_type
 - **clipContextDescription:** Provide a brief summary (max 75 words) of the conversation leading into the selected clip to establish its context
-- **suggestedClip (Array):** Extract the full dialogue of the selected segment (ideally 30+ seconds, targeting around 90 seconds, STRICT maximum 120 seconds). Create a new object for each continuous block of speech from a single speaker. Each object must include:
+- **suggestedClip (Array):** Extract the full dialogue of the selected segment (**MINIMUM 25 seconds**, targeting around 90 seconds, STRICT maximum 120 seconds). If a clip is under 25 seconds, expand it by including more of the surrounding conversation. Create a new object for each continuous block of speech from a single speaker. Each object must include:
   - `timestamp`: The start time of that speaker's turn
   - `speaker`: The speaker's name (e.g., "SPEAKER_07 (Dr. Mary Talley Bowden)")
   - `quote`: The **full, verbatim quote** of what the speaker says in that turn
 - **fullerContextTimestamps:**
   - `start`: The precise start time of the selected clip (in seconds)
   - `end`: The precise end time of the selected clip (in seconds)
-- **segmentDurationInSeconds:** Calculate the total duration of the clip (end - start). This MUST be ≤120 seconds. If your segment exceeds 120 seconds, you must shorten it to focus on the most impactful portion of the harmful content.
+- **segmentDurationInSeconds:** Calculate the total duration of the clip (end - start). **MINIMUM is 25 seconds** — if a clip is shorter, expand it with surrounding context or reject it. Default maximum is 120 seconds. If the segment has `"extended_clip": true` (multi-part argument requiring context), maximum is 180 seconds. If your segment exceeds the applicable limit, shorten it to focus on the most impactful portion.
+- **extended_clip (Boolean, optional):** Set to `true` only for multi-part arguments where splitting would lose critical context and the clip needs 121-180 seconds. Default: `false`.
 
 **Quote Verification Requirements:**
 
@@ -163,7 +170,7 @@ The final output MUST be a single JSON array containing exactly 20 objects. Each
     "primary_speaker_of_quote": "Dr. Mary Talley Bowden",
     "severityRating": "CRITICAL",
     "harm_category": {
-      "primary_type": "Dangerous Misinformation",
+      "primary_type": "Misinformation",
       "misinformation_subtype": [
         "Health/Medical"
       ]
@@ -260,7 +267,7 @@ The final output MUST be a single JSON array containing exactly 20 objects. Each
 | **False Context** | When genuine content is shared with false contextual information | "Discussing an old, retracted study as if it's current, valid science to question vaccine safety." |
 | **Misleading Content** | Misleading use of information to frame an issue or individual | "Using anecdotes of rare vaccine side effects to imply vaccines are broadly unsafe, ignoring statistical data on overall safety and efficacy." |
 | **False Connection** | When headlines, visuals, or captions do not accurately reflect the content | "An episode title suggests a definitive debunking of climate change, while the content is primarily speculative opinion." |
-| **Satire/Parody** | No intention to cause harm, but has the potential to fool. (Exclude unless presented as fact and meets criteria for dangerous misinformation) | "A guest makes an outlandish, clearly satirical claim about a political figure, but if taken literally by listeners without recognizing the satire, could spread a false belief." |
+| **Satire/Parody** | No intention to cause harm, but has the potential to fool. (Exclude unless presented as fact and meets criteria for misinformation) | "A guest makes an outlandish, clearly satirical claim about a political figure, but if taken literally by listeners without recognizing the satire, could spread a false belief." |
 
 ### Table 2: Common Rhetorical Strategies in Misinformation/Conspiracy Narratives
 

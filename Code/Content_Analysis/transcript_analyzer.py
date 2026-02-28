@@ -11,7 +11,8 @@ Usage:
 import sys
 import os
 import json
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from datetime import datetime
 import logging
 import traceback
@@ -43,6 +44,9 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 API_KEY = os.getenv('GEMINI_API_KEY')
+
+# Global client instance (set by configure_gemini)
+_gemini_client = None
 
 def load_episode_metadata_from_path(transcript_path):
     """
@@ -258,12 +262,15 @@ def get_organized_output_path(transcript_file, file_organizer=None):
     return fallback_path
 
 def configure_gemini():
-    """Configure the Gemini API key."""
+    """Configure the Gemini API client."""
+    global _gemini_client
     logger.info("Starting Gemini API configuration")
     try:
-        if API_KEY:
-            genai.configure(api_key=API_KEY)
-            logger.info("Gemini API configured successfully")
+        # Check module-level API_KEY first, then fallback to environment variable
+        api_key = API_KEY or os.getenv('GEMINI_API_KEY')
+        if api_key:
+            _gemini_client = genai.Client(api_key=api_key)
+            logger.info("Gemini API client configured successfully")
             return True
         else:
             logger.error("No API key found")
@@ -271,6 +278,14 @@ def configure_gemini():
     except Exception as e:
         logger.error(f"Error configuring Gemini API: {e}")
         return False
+
+def get_gemini_client():
+    """Get the configured Gemini client, initializing if needed."""
+    global _gemini_client
+    if _gemini_client is None:
+        if not configure_gemini():
+            raise Exception("Failed to configure Gemini API client")
+    return _gemini_client
 
 def load_transcript(file_path):
     """Load and parse the JSON transcript file."""
@@ -375,18 +390,27 @@ def validate_and_clean_json(response_text):
             logger.error("JSON is not an array")
             return None
             
-        # Validate each entry has required fields
-        required_fields = [
-            'narrativeSegmentTitle', 'severityRating', 'relevantChecklistTheme',
-            'relevantChecklistIndicator', 'harmPotential'
-        ]
-        
+        # Validate each entry has some required fields (flexible validation)
+        # Accept either old format or new format from Gemini
+        old_format_fields = ['narrativeSegmentTitle', 'severityRating', 'relevantChecklistTheme']
+        new_format_fields = ['narrativeSegmentTitle', 'severityRating', 'harm_category']
+        minimal_fields = ['narrativeSegmentTitle', 'severityRating']  # Bare minimum
+
         valid_entries = []
         for entry in parsed:
-            if isinstance(entry, dict) and all(field in entry for field in required_fields):
+            if not isinstance(entry, dict):
+                logger.warning(f"Skipping non-dict entry: {entry}")
+                continue
+
+            # Accept if it matches old format, new format, or at least has minimal fields
+            has_old_format = all(field in entry for field in old_format_fields)
+            has_new_format = all(field in entry for field in new_format_fields)
+            has_minimal = all(field in entry for field in minimal_fields)
+
+            if has_old_format or has_new_format or has_minimal:
                 valid_entries.append(entry)
             else:
-                logger.warning(f"Skipping invalid entry: {entry}")
+                logger.warning(f"Skipping invalid entry (missing required fields): {list(entry.keys())}")
         
         if not valid_entries:
             logger.error("No valid entries found")
@@ -636,19 +660,13 @@ def detect_episode_type_and_rules(transcript_file):
         # Define rules directory
         rules_dir = os.path.join(os.path.dirname(__file__), 'Analysis_Guidelines')
         
-        # Check for Joe Rogan Experience
-        if 'joe_rogan_experience' in normalized_path or 'joe rogan experience' in normalized_path:
-            jre_rules_file = os.path.join(rules_dir, 'Joe_Rogan_selective_analysis_rules.txt')
-            if os.path.exists(jre_rules_file):
-                logger.info(f"Detected Joe Rogan Experience episode - using specific rules")
-                return 'Joe_Rogan_Experience', jre_rules_file
-        
-        # Check for other podcast types (can be extended later)
-        if 'lex_fridman' in normalized_path:
-            # Could add Lex Fridman specific rules if needed
-            pass
-        
-        # No specific rules found
+        # Use universal selective analysis rules for all podcasts
+        rules_file = os.path.join(rules_dir, 'selective_analysis_rules.txt')
+        if os.path.exists(rules_file):
+            logger.info(f"Using selective analysis rules")
+            return 'selective_analysis', rules_file
+
+        # No rules found
         return None, None
         
     except Exception as e:
@@ -740,16 +758,20 @@ def upload_transcript_to_gemini(transcript_path, display_name):
             except (json.JSONDecodeError, ValueError) as repair_error:
                 logger.error(f"Failed to repair JSON: {repair_error}")
                 raise ValueError(f"Invalid JSON format - original error: {e}, repair failed: {repair_error}")
-          # Upload file to Gemini using the correct API
+          # Upload file to Gemini using the new genai client API
         logger.info(f"Uploading to Gemini with display name: {display_name}")
-          # Perform the upload - use text/plain MIME type to avoid analysis errors
+        client = get_gemini_client()
+
+          # Perform the upload using the new client API
         # Note: JSON files work perfectly when uploaded with text/plain MIME type
-        file_object = genai.upload_file(
-            path=transcript_path,
-            mime_type="text/plain",
-            display_name=display_name
+        file_object = client.files.upload(
+            file=transcript_path,
+            config=types.UploadFileConfig(
+                mime_type="text/plain",
+                display_name=display_name
+            )
         )
-        
+
         logger.info(f"File uploaded successfully: {file_object.name}")
         logger.info(f"File URI: {file_object.uri}")
         
@@ -824,7 +846,7 @@ def analyze_with_gemini_file_upload(file_object, analysis_rules, output_dir=None
                 # Create header with metadata
                 header = f"""GEMINI FILE UPLOAD ANALYSIS PROMPT
 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-Model: gemini-2.5-flash-preview-05-20
+Model: gemini-2.5-pro
 Method: File Upload API
 Prompt Length: {len(prompt_text)} characters
 File Object: {file_object.name}
@@ -845,76 +867,139 @@ FULL PROMPT SENT TO GEMINI:
                 logger.info(f"Saved file upload prompt to: {prompt_path}")
             except Exception as e:
                 logger.warning(f"Failed to save prompt file: {e}")
-          # Generate response with file and prompt using correct API
+          # Generate response with file and prompt using new genai client API
         logger.info("Sending request to Gemini with uploaded file")
-          # Create model with optimized configuration (no safety settings, no token limits)
-        model = genai.GenerativeModel(
-            #'gemini-2.5-flash-preview-05-20',
-            'gemini-2.5-pro-preview-06-05',
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.1,
-                top_p=0.9,
-                # Removed top_k to allow more flexibility in token selection
-                # Removed max_output_tokens to allow unlimited response length
-                candidate_count=1,
-                response_mime_type="application/json"
+        sys.stdout.flush()
+
+        try:
+            logger.info("Getting Gemini client...")
+            client = get_gemini_client()
+            logger.info("Calling client.models.generate_content()...")
+            sys.stdout.flush()
+
+            # Generate response using the new client API
+            # Using gemini-2.5-pro for deeper reasoning on subjective analysis
+            # Note: Not setting response_mime_type to avoid SDK validation issues
+            response = client.models.generate_content(
+                model='gemini-2.5-pro',
+                contents=[prompt_text, file_object],
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    top_p=0.9,
+                    candidate_count=1,
+                    max_output_tokens=65536
+                )
             )
-            # Removed all safety_settings to eliminate potential blocking issues
-        )
-        
-        # Generate response with file and prompt
-        response = model.generate_content([prompt_text, file_object])
-        
+            logger.info(f"Response received. Type: {type(response)}")
+            sys.stdout.flush()
+        except Exception as gen_err:
+            logger.error(f"Error generating content: {type(gen_err).__name__}: {gen_err}")
+            raise
+
         # Check for safety-related blocks or empty responses
         if not response:
             logger.error("No response from Gemini")
             return None
-        
-        # Check finish reason before accessing text
+
+        # Debug: log response attributes
+        logger.info(f"Response has candidates: {hasattr(response, 'candidates')}")
         if hasattr(response, 'candidates') and response.candidates:
+            logger.info(f"Number of candidates: {len(response.candidates)}")
             candidate = response.candidates[0]
             if hasattr(candidate, 'finish_reason'):
                 finish_reason = candidate.finish_reason
                 logger.info(f"Gemini finish reason: {finish_reason}")
-                
-                # Handle different finish reasons
-                if finish_reason == 2:  # SAFETY
+
+                # Handle different finish reasons (new API uses string values)
+                finish_str = str(finish_reason).upper()
+                if 'SAFETY' in finish_str:
                     logger.warning("Gemini blocked response due to safety concerns")
-                    logger.warning("This might be due to sensitive content in the transcript")
                     return "SAFETY_BLOCKED: Content was blocked by Gemini's safety filters"
-                elif finish_reason == 3:  # RECITATION
+                elif 'RECITATION' in finish_str:
                     logger.warning("Gemini blocked response due to recitation concerns")
                     return "RECITATION_BLOCKED: Content was blocked due to potential recitation"
-                elif finish_reason != 1:  # 1 = STOP (successful completion)
+                elif 'MAX_TOKENS' in finish_str:
+                    # MAX_TOKENS means response was truncated but we can still use partial content
+                    logger.warning(f"Response truncated due to MAX_TOKENS - will attempt to use partial content")
+                    # Don't return - continue to extract text
+                elif 'STOP' not in finish_str and finish_reason not in [1, 'STOP']:
                     logger.warning(f"Unexpected finish reason: {finish_reason}")
-                    return f"BLOCKED: Finish reason {finish_reason}"
-        
+                    # Don't immediately return - try to extract text first
+
         # Try to get response text
         try:
-            if not response.text:
+            response_text = response.text
+            if not response_text:
                 logger.error("Empty response text from Gemini")
                 return None
-            response_text = response.text.strip()
-        except ValueError as e:
-            # This handles the "response.text quick accessor" error
+            response_text = response_text.strip()
+        except (ValueError, AttributeError) as e:
             logger.error(f"Could not access response text: {e}")
-            if hasattr(response, 'candidates') and response.candidates:
-                candidate = response.candidates[0]
-                if hasattr(candidate, 'finish_reason'):
-                    logger.error(f"Finish reason: {candidate.finish_reason}")
-            return "ERROR: Could not access response text"
+            # Try alternative access method for new API
+            try:
+                if response.candidates and response.candidates[0].content:
+                    parts = response.candidates[0].content.parts
+                    if parts:
+                        response_text = parts[0].text.strip()
+                        logger.info("Retrieved text from candidates[0].content.parts[0].text")
+                    else:
+                        return "ERROR: No parts in response content"
+                else:
+                    return "ERROR: Could not access response text"
+            except Exception as alt_err:
+                logger.error(f"Alternative text access also failed: {alt_err}")
+                return "ERROR: Could not access response text"
         
         logger.info(f"Received response length: {len(response_text)} characters")
-        
+        logger.info(f"Response preview (first 500 chars): {response_text[:500]}")
+        logger.info(f"Response preview (last 500 chars): {response_text[-500:]}")
+
         # Validate and clean JSON
         cleaned_json = validate_and_clean_json(response_text)
-        
+
         if cleaned_json:
             logger.info("JSON validation successful")
             return cleaned_json
         else:
-            logger.error("JSON validation failed")
-            return response_text  # Return raw response for manual inspection
+            logger.error("JSON validation failed - attempting recovery")
+            # Try to at least strip markdown and fix truncated JSON
+            recovery_text = response_text
+            if '```json' in recovery_text:
+                start = recovery_text.find('```json') + 7
+                end = recovery_text.rfind('```')
+                if end > start:
+                    recovery_text = recovery_text[start:end].strip()
+                else:
+                    recovery_text = recovery_text[start:].strip()
+
+            # Try to repair truncated JSON array
+            if recovery_text.strip().startswith('['):
+                # Find the last complete segment by looking for pattern: },\n  {
+                # or just }] at the end of a complete segment
+                import re
+                # Look for the last occurrence of a complete segment ending
+                # Pattern: closing brace followed by comma or end of array
+                last_complete_match = None
+                for match in re.finditer(r'\}\s*,\s*\{', recovery_text):
+                    last_complete_match = match
+
+                if last_complete_match:
+                    # Cut at the position after the closing brace and comma
+                    cut_pos = last_complete_match.start() + 1  # Include the }
+                    recovery_text = recovery_text[:cut_pos] + '\n]'
+                    logger.info(f"Recovered truncated JSON by closing at last complete segment (pos {cut_pos})")
+                    # Validate the recovery
+                    try:
+                        json.loads(recovery_text)
+                        return recovery_text
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Recovery attempt failed validation: {e}")
+                else:
+                    # No complete segment boundary found, try simpler fix
+                    if not recovery_text.strip().endswith(']'):
+                        recovery_text = recovery_text.rstrip() + '\n]'
+
+            return recovery_text  # Return best-effort recovery
             
     except Exception as e:
         logger.error(f"Error in Gemini file upload analysis: {e}")
@@ -927,17 +1012,18 @@ FULL PROMPT SENT TO GEMINI:
 def cleanup_uploaded_file(file_object, max_retries=3):
     """
     Clean up uploaded file with retry mechanism.
-    
+
     Args:
-        file_object: The file object returned from genai.upload_file()
+        file_object: The file object returned from client.files.upload()
         max_retries: Maximum number of retry attempts for deletion
     """
     if not file_object:
         return
-    
+
     for attempt in range(max_retries):
         try:
-            genai.delete_file(name=file_object.name)
+            client = get_gemini_client()
+            client.files.delete(name=file_object.name)
             logger.info(f"✅ Uploaded file deleted successfully: {file_object.name}")
             return
         except Exception as e:

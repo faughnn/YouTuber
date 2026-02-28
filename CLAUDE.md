@@ -1,139 +1,107 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with this repository.
 
-## Commands
+## Running the Pipeline
 
-### Running the Pipeline
+Always use the project venv and set UTF-8 encoding for Windows terminals:
+
 ```bash
-# Interactive menu (recommended for development)
-python run_pipeline.py
-
-# Direct CLI usage
-python Code/master_processor_v2.py "https://youtube.com/watch?v=..." --full-pipeline
-python Code/master_processor_v2.py "https://youtube.com/watch?v=..." --audio-only --tts-provider elevenlabs
-python Code/master_processor_v2.py "https://youtube.com/watch?v=..." --script-only
+cd "G:/YouTuber"
+PYTHONIOENCODING=utf-8 PYTHONUTF8=1 "G:/YouTuber/venv/Scripts/python.exe" Code/master_processor_v2.py <URL> <mode> [options]
 ```
 
-### Testing
-```bash
-# Run specific module tests
-python -m pytest Code/Chatterbox/tests/test_master_processor_stage5.py
-python -m pytest Code/Chatterbox/tests/test_pipeline_integration.py
+### Modes
+- `--full-pipeline` — All stages: download, transcribe, analyze, narrate, TTS audio, video clipping, video compilation
+- `--audio-only` — Stages 1-5 (up to TTS audio generation, no video)
+- `--script-only` — Stages 1-4 (up to narrative script generation, no audio/video)
 
-# Run quality control tests
-python -m pytest Code/Content_Analysis/test_rebuttal_verifier.py
+### Options
+- `--tts-provider {chatterbox,elevenlabs,edgetts}` — TTS engine (default: edgetts)
+- `--host "Host Name"` — Override auto-detected host name
+- `--guest "Guest Name"` — Override auto-detected guest name
+- `--config PATH` — Custom config file (default: `Code/Config/default_config.yaml`)
+- `-q` / `-v` / `--debug` — Quiet, verbose, or debug output
+
+### Examples
+```bash
+# Full pipeline with Edge TTS
+PYTHONIOENCODING=utf-8 PYTHONUTF8=1 "G:/YouTuber/venv/Scripts/python.exe" Code/master_processor_v2.py "https://youtube.com/watch?v=..." --full-pipeline --tts-provider edgetts
+
+# Script only, with name overrides
+PYTHONIOENCODING=utf-8 PYTHONUTF8=1 "G:/YouTuber/venv/Scripts/python.exe" Code/master_processor_v2.py "https://youtube.com/watch?v=..." --script-only --host "Joe Rogan" --guest "Elon Musk"
 ```
 
-### Installation
-```bash
-pip install -r requirements.txt
-```
+### Claude Code Workflow
+When the user provides a YouTube URL:
+1. Determine the host and guest from the video title/channel (or ask if ambiguous)
+2. Check if a guest profile exists in `Code/Content_Analysis/Analysis_Guidelines/Guest_Profiles/`
+3. If no profile exists, create one based on the guest's known public positions and history
+4. Run the pipeline with appropriate arguments
+5. Monitor output and fix any errors
+
+### Pipeline Caching
+Stages 1-3 cache results automatically. Re-runs skip completed stages, useful for iterating on later stages without re-downloading or re-transcribing.
+
+## Python Environment
+
+- **Venv**: `G:/YouTuber/venv/` — Python 3.13, CUDA-enabled PyTorch 2.6.0+cu124
+- **GPU**: RTX 2070 Super (8GB VRAM)
+- Always use the venv Python, never system Python
+- `PYTHONIOENCODING=utf-8 PYTHONUTF8=1` required on Windows to avoid Rich emoji encoding crashes
 
 ## Architecture Overview
 
-This is a 7-stage YouTube video processing pipeline that transforms YouTube content into polished video compilations:
+8-stage YouTube video processing pipeline:
 
-1. **Media Extraction** - Downloads audio/video from YouTube
-2. **Transcript Generation** - Creates speaker-diarized transcripts  
-3. **Content Analysis** - AI-powered analysis using Google Gemini API
-4. **Narrative Generation** - Creates engaging podcast-style scripts
-5. **Audio Generation** - TTS using Chatterbox (local) or ElevenLabs (cloud)
-6. **Video Clipping** - Extracts relevant video segments
-7. **Video Compilation** - Combines audio and video into final output
-
-### Entry Points
-- `run_pipeline.py` - Root launcher with interactive menu
-- `Code/run_pipeline_menu.py` - Menu system implementation
-- `Code/master_processor_v2.py` - Main orchestrator (CLI and programmatic)
+1. **Media Extraction** — Downloads audio/video from YouTube via yt-dlp
+2. **Transcript Generation** — Speaker-diarized transcripts via whisperX (GPU)
+3. **Content Analysis** — AI analysis using Google Gemini API
+4. **Narrative Generation** — Multi-pass binary filtering pipeline + script generation
+5. **Audio Generation** — TTS (Edge TTS, Chatterbox, or ElevenLabs)
+6. **Video Clipping** — Extracts relevant video segments via FFmpeg
+7. **Video Compilation** — Combines narration audio + video clips into final output
+8. **YouTube Description** — Generates upload-ready description
 
 ### Content Organization
 Episodes are organized as: `Content/{Host_Name}/{Host_Guest_Episode}/`
-- `Input/` - Downloaded media and metadata
-- `Processing/` - Intermediate analysis files  
-- `Output/` - Generated audio, scripts, clips, final videos
+- `Input/` — Downloaded media and metadata
+- `Processing/` — Intermediate analysis, quality control debug files
+- `Output/` — Generated audio, scripts, clips, final videos
 
-## Key Architectural Patterns
+### Key Files
+- `Code/master_processor_v2.py` — Main orchestrator (CLI entry point)
+- `Code/Config/default_config.yaml` — Central config (API keys, parameters)
+- `Code/Content_Analysis/podcast_narrative_generator.py` — Script generation
+- `Code/Content_Analysis/binary_segment_filter.py` — 5-gate segment filtering
+- `Code/Content_Analysis/binary_rebuttal_verifier.py` — 4-gate rebuttal verification
+- `Code/Content_Analysis/Analysis_Guidelines/Guest_Profiles/` — Guest-specific analysis profiles
 
-### Pipeline-Driven Orchestration
-- Direct delegation to working modules without abstraction layers
-- Orchestrator adapts to modules, not vice versa
-- Working modules define interaction patterns
+### Environment Variables
+- `GEMINI_API_KEY` — Google Gemini API (required)
+- `HUGGINGFACE_TOKEN` — HuggingFace (required for speaker diarization)
+- `ELEVENLABS_API_KEY` — ElevenLabs TTS (optional)
 
-### Enhanced Logging System
-- Rich-based visual progress indicators
-- Hierarchical stage contexts with specialized loggers
-- Located in `Code/Utils/enhanced_pipeline_logger.py`
+### Quality Control Pipeline (Stage 4)
+- Binary 5-gate segment filtering (claim detection, verifiability, accuracy, harm, rebuttability)
+- Diversity selection with round-robin topic balancing
+- False negative recovery
+- Recent events verification via web search
+- Script generation (structure plan + creative script)
+- Output quality gate
+- Binary 4-gate rebuttal verification with self-correction
+- External fact validation
 
-### Two-Pass AI Quality Control (Recent Addition)
-- Pass 1: Initial content analysis
-- Pass 2: 5-dimension quality assessment and filtering
-- Automated rebuttal verification and rewriting
-- Modules: `quality_assessor.py`, `rebuttal_verifier_rewriter.py`, `two_pass_controller.py`
+### API Debug Logging
+All Gemini API requests/responses are saved to `Processing/Quality_Control/` as debug JSON files for inspection.
 
-### Automatic Service Management
-- Chatterbox TTS server lifecycle management (startup/shutdown)
-- Health checks and cleanup in `master_processor_v2.py`
+## Testing
+```bash
+PYTHONIOENCODING=utf-8 PYTHONUTF8=1 "G:/YouTuber/venv/Scripts/python.exe" -m pytest Code/Chatterbox/tests/test_master_processor_stage5.py
+PYTHONIOENCODING=utf-8 PYTHONUTF8=1 "G:/YouTuber/venv/Scripts/python.exe" -m pytest Code/Content_Analysis/test_rebuttal_verifier.py
+```
 
-## Configuration System
-
-### Central Configuration: `Code/Config/default_config.yaml`
-- API keys (Gemini, HuggingFace, ElevenLabs)
-- Processing parameters (Whisper model, batch sizes)
-- TTS settings (voice, speaking rate, device preferences)  
-- File paths and episode organization
-
-### Environment Override Pattern
-API keys can be set via environment variables:
-- `GEMINI_API_KEY`
-- `HUGGINGFACE_TOKEN`
-- `ELEVENLABS_API_KEY`
-
-## Module Structure
-
-### Core Processing Modules
-- `Code/Extraction/` - YouTube download and audio diarization
-- `Code/Content_Analysis/` - AI analysis and narrative generation
-- `Code/Chatterbox/` - Local TTS engine
-- `Code/ElevenLabs/` - Cloud TTS integration
-- `Code/Video_Clipper/` - Video segment extraction
-- `Code/Video_Compilator/` - Final video compilation
-
-### Utility Infrastructure
-- `Code/Utils/` - Logging, configuration, file management, validation
-- Schema validation via `json_schema_validator.py`
-- Episode organization via `file_organizer.py`
-- Name extraction from YouTube metadata
-
-### Testing Infrastructure
-- Module-level tests in `{Module}/tests/`
-- Integration tests using real episode data
-- Performance benchmarking
-- JSON schema validation testing
-
-## Development Guidelines
-
-### Working with This Codebase
-- Use `run_pipeline.py` for testing workflows
-- All modules expect episode directory structure
-- JSON schemas define data format contracts between stages
-- New modules should follow direct-delegation pattern
-
-### Adding New Features
-- Configuration changes go in `default_config.yaml`
-- New stages integrate with `master_processor_v2.py`
-- Add comprehensive tests following existing patterns
-- Use Rich logging system for user feedback
-
-### Key Integration Points
-- Episode metadata flows through `unified_podcast_script.json`
-- Quality control uses `verified_unified_script.json` 
-- All video processing expects FFmpeg availability
-- TTS modules use unified interface with progress callbacks
-
-### Recent Quality Control System
-The Two-Pass AI Quality Control system adds:
-- 5-dimension quality scoring (Quote Strength, Factual Accuracy, Potential Impact, Content Specificity, Context Appropriateness)
-- Evidence-based segment filtering and selection
-- Automated rebuttal fact-checking and rewriting
-- Maintains backward compatibility with existing pipeline
+## Known Issues
+- Gemini API rejects combining `response_mime_type="application/json"` with `tools=[google_search]` — use one or the other, never both
+- yt-dlp warns about missing JS runtime (deno) — non-fatal, downloads work without it
+- Keep yt-dlp updated (`pip install --upgrade yt-dlp`) — older versions get 403s from YouTube

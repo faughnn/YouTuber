@@ -1,3 +1,29 @@
+# Apply torch.load patch BEFORE any other imports to fix PyTorch 2.6+ compatibility
+# This must be done early so pyannote/whisperx models can load correctly
+try:
+    import torch
+
+    # Method 1: Add required classes to safe globals
+    try:
+        import typing
+        from omegaconf import ListConfig, DictConfig
+        from omegaconf.base import ContainerMetadata
+        safe_globals = [ListConfig, DictConfig, ContainerMetadata, typing.Any, list, dict, tuple, set]
+        torch.serialization.add_safe_globals(safe_globals)
+    except Exception:
+        pass
+
+    # Method 2: Patch torch.load to use weights_only=False by default (most reliable)
+    _original_torch_load = torch.load
+    def _patched_torch_load(*args, **kwargs):
+        # Handle both missing key AND explicit None (Lightning passes weights_only=None)
+        if kwargs.get('weights_only') is None:
+            kwargs['weights_only'] = False
+        return _original_torch_load(*args, **kwargs)
+    torch.load = _patched_torch_load
+except ImportError:
+    pass  # torch not installed yet
+
 import sys
 import os
 
@@ -36,10 +62,15 @@ def print_main_menu(youtube_url):
 def get_tts_provider_choice():
     """Prompt user to select TTS provider."""
     print("\n🎤 TTS Provider Selection")
-    print("1. Chatterbox TTS (Free)")
-    print("2. ElevenLabs TTS (Paid - Higher Quality)")
-    choice = input("Select TTS provider (1-2): ").strip()
-    return "elevenlabs" if choice == "2" else "chatterbox"
+    print("1. Edge TTS (Free - Microsoft Neural Voices)")
+    print("2. Chatterbox TTS (Free - Local)")
+    print("3. ElevenLabs TTS (Paid - Higher Quality)")
+    choice = input("Select TTS provider (1-3): ").strip()
+    if choice == "2":
+        return "chatterbox"
+    elif choice == "3":
+        return "elevenlabs"
+    return "edgetts"
 
 def get_narrative_format_choice():
     """Prompt user to select narrative format."""

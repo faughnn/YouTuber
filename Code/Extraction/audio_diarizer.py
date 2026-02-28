@@ -54,6 +54,17 @@ import time
 import re
 from tqdm import tqdm
 
+# Fix for PyTorch 2.6+ weights_only default change
+# pyannote models require weights_only=False for proper loading
+# Monkey patch torch.load to use the old default behavior
+_original_torch_load = torch.load
+def _patched_torch_load(*args, **kwargs):
+    # Handle both missing key AND explicit None (Lightning passes weights_only=None)
+    if kwargs.get('weights_only') is None:
+        kwargs['weights_only'] = False
+    return _original_torch_load(*args, **kwargs)
+torch.load = _patched_torch_load
+
 # Add parent directories to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from Utils.project_paths import get_transcripts_dir
@@ -228,16 +239,29 @@ def diarize_audio(audio_path, hf_auth_token_to_use, output_file_path=None):
         print("✅ Alignment complete.")
 
         # 3. Perform Speaker Diarization
+        print(f"[DEBUG] hf_auth_token_to_use type: {type(hf_auth_token_to_use)}, value: {repr(hf_auth_token_to_use)[:30] if hf_auth_token_to_use else 'None/Empty'}", flush=True)
         if not hf_auth_token_to_use:
-            print("\\n⚠️ Warning: No Hugging Face token is being used for diarization.")
+            print("\\n⚠️ Warning: No Hugging Face token is being used for diarization.", flush=True)
             print("Diarization may fail or use a less accurate model if the chosen diarization model requires it.")
             print("It is highly recommended to use a token after accepting pyannote.audio model terms for best results.")
-        
+        else:
+            print(f"[DEBUG] Using HF token for diarization: {hf_auth_token_to_use[:10]}...{hf_auth_token_to_use[-4:]}", flush=True)
+
         with tqdm(total=100, desc="👥 Speaker diarization", ncols=80, colour='magenta') as pbar:
-            diarization_pipeline = whisperx.diarize.DiarizationPipeline(use_auth_token=hf_auth_token_to_use, device=device)
-            pbar.update(30)
-            diarized_segments = diarization_pipeline(audio_path) # Takes audio file path
-            pbar.update(70)
+            try:
+                print("[DEBUG] Creating DiarizationPipeline...", flush=True)
+                diarization_pipeline = whisperx.diarize.DiarizationPipeline(use_auth_token=hf_auth_token_to_use, device=device)
+                print(f"[DEBUG] Pipeline created successfully: {type(diarization_pipeline)}")
+                pbar.update(30)
+                print("[DEBUG] Running diarization on audio file...")
+                diarized_segments = diarization_pipeline(audio_path) # Takes audio file path
+                print(f"[DEBUG] Diarization result type: {type(diarized_segments)}")
+                pbar.update(70)
+            except Exception as diar_e:
+                print(f"[DEBUG] Diarization error: {type(diar_e).__name__}: {diar_e}")
+                import traceback
+                traceback.print_exc()
+                raise
         print("✅ Diarization complete.")        # 4. Assign word speakers
         with tqdm(total=100, desc="🎯 Assigning speakers", ncols=80, colour='cyan') as pbar:
             final_transcript_segments = whisperx.assign_word_speakers(diarized_segments, aligned_result)

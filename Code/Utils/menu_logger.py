@@ -201,8 +201,8 @@ class MenuLogger:
     def show_narrative_format_menu(self):
         """Display menu for selecting narrative format."""
         menu_content = (
-            "[cyan bold]1[/]  Narrative with normal format (tts_podcast_narrative_prompt_WITHOUT_HOOK.txt)\n"
-            "[cyan bold]2[/]  Narrative with Opening Hook (tts_podcast_narrative_prompt.txt)\n"
+            "[cyan bold]1[/]  Narrative without opening hook\n"
+            "[cyan bold]2[/]  Narrative with opening hook\n"
             "\n"
             "[cyan bold]0[/]  [bold red]Cancel[/]"
         )

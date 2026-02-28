@@ -165,18 +165,33 @@ class VideoClipExtractor:
             # Check if clip already exists
             output_path = output_dir / f"{clip.section_id}.mp4"
             if output_path.exists():
-                self.logger.info(f"Clip already exists, skipping: {output_path}")
-                existing_files.append(str(output_path))
-                # Create a success result for the existing file
-                result = ExtractionResult(
-                    success=True,
-                    clip_spec=clip,
-                    output_path=str(output_path),
-                    extraction_time=0.0,
-                    file_size_bytes=output_path.stat().st_size if output_path.exists() else 0
-                )
-                results.append(result)
-                continue
+                # Validate existing clip matches current timestamps by checking duration
+                existing_duration = self._get_video_duration(output_path)
+                start_seconds = self.parser.parse_timestamp(clip.start_time)
+                end_seconds = self.parser.parse_timestamp(clip.end_time)
+                expected_duration = end_seconds - start_seconds
+
+                # If duration differs by more than 1 second, re-extract
+                if existing_duration is None or abs(existing_duration - expected_duration) > 1.0:
+                    existing_str = f"{existing_duration:.1f}s" if existing_duration else "unknown"
+                    self.logger.warning(
+                        f"Existing clip duration mismatch ({existing_str} vs expected {expected_duration:.1f}s), "
+                        f"re-extracting: {output_path}"
+                    )
+                    output_path.unlink()  # Delete old clip
+                else:
+                    self.logger.info(f"Clip already exists with matching duration ({existing_duration:.1f}s), skipping: {output_path}")
+                    existing_files.append(str(output_path))
+                    # Create a success result for the existing file
+                    result = ExtractionResult(
+                        success=True,
+                        clip_spec=clip,
+                        output_path=str(output_path),
+                        extraction_time=0.0,
+                        file_size_bytes=output_path.stat().st_size
+                    )
+                    results.append(result)
+                    continue
             
             try:
                 result = self.extract_single_clip(
@@ -314,13 +329,35 @@ class VideoClipExtractor:
                 extraction_time=time.time() - start_time
             )
 
+    def _get_video_duration(self, video_path: Path) -> Optional[float]:
+        """
+        Get duration of existing video file using ffprobe.
+
+        Args:
+            video_path: Path to the video file
+
+        Returns:
+            Duration in seconds, or None if unable to determine
+        """
+        try:
+            result = subprocess.run(
+                ['ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
+                 '-of', 'csv=p=0', str(video_path)],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return float(result.stdout.strip())
+            return None
+        except (subprocess.TimeoutExpired, ValueError, Exception):
+            return None
+
     def _validate_video_file(self, video_path: Path) -> bool:
         """
         Validate that an extracted video file is not corrupted and can be read.
-        
+
         Args:
             video_path: Path to the video file to validate
-            
+
         Returns:
             True if file is valid, False if corrupted or unreadable
         """

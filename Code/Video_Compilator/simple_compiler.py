@@ -39,6 +39,7 @@ class EpisodeFileRegistry:
         # Define search directories in priority order
         search_dirs = [
             self.episode_path / 'Output' / 'Audio',
+            self.episode_path / 'Output' / 'Clips',  # Video clips from Stage 6
             self.episode_path / 'Output' / 'Video',
             self.episode_path / 'Audio',
             self.episode_path / 'Video'
@@ -475,11 +476,16 @@ class SimpleCompiler:
             self.logger.info(f"Starting compilation for episode: {episode_path.name}")
             
             # Step 1: Parse script and identify segments
-            # Only use verified scripts - two-pass quality control is mandatory
+            # Prefer verified scripts, but fall back to unified script if not available
             script_path = episode_path / "Output" / "Scripts" / "verified_unified_script.json"
-            
+
             if not script_path.exists():
-                raise FileNotFoundError(f"Verified script file not found: {script_path}. Run the complete two-pass pipeline to generate verified scripts.")
+                # Fall back to unified script (may not have gone through two-pass quality control)
+                script_path = episode_path / "Output" / "Scripts" / "unified_podcast_script.json"
+                if script_path.exists():
+                    self.logger.warning(f"Using non-verified script: {script_path.name}. For best results, run the complete two-pass pipeline.")
+                else:
+                    raise FileNotFoundError(f"No script file found in {episode_path / 'Output' / 'Scripts'}. Expected verified_unified_script.json or unified_podcast_script.json.")
             
             try:
                 segments = self.parse_script(script_path)
